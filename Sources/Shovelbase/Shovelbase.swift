@@ -2,7 +2,7 @@
 //
 // shovelbase runs the standard backend services (PostgREST, GoTrue, storage-api,
 // edge-runtime), so this client IS the supabase-swift API surface, re-exported
-// with shovelbase defaults plus analytics:
+// with shovelbase defaults plus analytics and feature flags:
 //
 //     import Shovelbase
 //
@@ -16,6 +16,7 @@
 //     try await shovelbase.storage.from("avatars").upload(path, data: data)  // storage
 //     let reply = try await shovelbase.functions.invoke("kyd-golf-chat")     // edge functions
 //     shovelbase.analytics.track("signup", properties: ["plan": "pro"])      // analytics
+//     if await shovelbase.flags.isEnabled("new-checkout") { … }              // feature flags
 //
 // Everything supabase-swift exports is re-exported here, so types and helpers
 // (Session, User, PostgrestError, …) come from the same `import Shovelbase`.
@@ -25,6 +26,7 @@
 import Foundation
 @_exported import Supabase
 @_exported import ShovelbaseAnalytics
+@_exported import ShovelbaseFlags
 
 public enum Shovelbase {
 
@@ -32,14 +34,16 @@ public enum Shovelbase {
     /// (`http://<host>/sb/<ref>`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
-    /// Also configures `ShovelbaseAnalytics.shared` against the same project, so
-    /// `client.analytics.track(…)` works immediately; `analytics` tunes event
-    /// batching (flush interval, batch size).
+    /// Also configures `ShovelbaseAnalytics.shared` and `ShovelbaseFlags.shared`
+    /// against the same project, so `client.analytics.track(…)` and
+    /// `client.flags.isEnabled(…)` work immediately; `analytics` tunes event
+    /// batching (flush interval, batch size) and `flags` the snapshot cache.
     public static func createClient(
         url: String,
         key: String,
         options: SupabaseClientOptions = .init(),
-        analytics analyticsOptions: ShovelbaseAnalytics.Options = .init()
+        analytics analyticsOptions: ShovelbaseAnalytics.Options = .init(),
+        flags flagsOptions: ShovelbaseFlags.Options = .init()
     ) -> SupabaseClient {
         var base = url
         while base.hasSuffix("/") { base.removeLast() }
@@ -47,6 +51,7 @@ public enum Shovelbase {
             preconditionFailure("Shovelbase.createClient(url:key:) requires the project URL and an API key")
         }
         ShovelbaseAnalytics.configure(url: base, apiKey: key, options: analyticsOptions)
+        ShovelbaseFlags.configure(url: base, apiKey: key, options: flagsOptions)
         return SupabaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
     }
 }
@@ -56,4 +61,9 @@ extension SupabaseClient {
     /// Observability → Analytics page. Alias for `ShovelbaseAnalytics.shared`
     /// (configured by `Shovelbase.createClient`).
     public var analytics: ShovelbaseAnalytics { ShovelbaseAnalytics.shared }
+
+    /// Feature flags toggled on the portal's Analytics → Feature Flags page.
+    /// Alias for `ShovelbaseFlags.shared` (configured by
+    /// `Shovelbase.createClient`).
+    public var flags: ShovelbaseFlags { ShovelbaseFlags.shared }
 }
