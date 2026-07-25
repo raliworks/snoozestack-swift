@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "shovelbase-swift",
-    // Platform floors follow supabase-swift 2.x (the Shovelbase target's
+    // Platform floors follow the upstream client 2.x (the Shovelbase target's
     // dependency); ShovelbaseAnalytics and ShovelbaseFlags themselves have no
     // third-party dependencies.
     platforms: [
@@ -13,7 +13,7 @@ let package = Package(
         .watchOS(.v9),
     ],
     products: [
-        // Full client: database, auth, storage, edge functions (supabase-swift
+        // Full client: database, auth, storage, edge functions (upstream client
         // API surface re-exported) + analytics + feature flags.
         .library(name: "Shovelbase", targets: ["Shovelbase"]),
         // Analytics only — no third-party dependencies.
