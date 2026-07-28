@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "shovelbase-swift",
     // Platform floors follow the upstream client 2.x (the Shovelbase target's
-    // dependency); ShovelbaseAnalytics and ShovelbaseFlags themselves have no
+    // dependency); ShovelbaseSignals and ShovelbaseFlags themselves have no
     // third-party dependencies.
     platforms: [
         .iOS(.v16),
@@ -14,9 +14,11 @@ let package = Package(
     ],
     products: [
         // Full client: database, auth, storage, edge functions (upstream client
-        // API surface re-exported) + analytics + feature flags.
+        // API surface re-exported) + signals + feature flags.
         .library(name: "Shovelbase", targets: ["Shovelbase"]),
-        // Analytics only — no third-party dependencies.
+        // Signals (event tracking) only — no third-party dependencies.
+        .library(name: "ShovelbaseSignals", targets: ["ShovelbaseSignals"]),
+        // Deprecated alias of ShovelbaseSignals — kept for existing importers.
         .library(name: "ShovelbaseAnalytics", targets: ["ShovelbaseAnalytics"]),
         // Feature flags only — no third-party dependencies.
         .library(name: "ShovelbaseFlags", targets: ["ShovelbaseFlags"]),
@@ -29,12 +31,19 @@ let package = Package(
             name: "Shovelbase",
             dependencies: [
                 .product(name: "Supabase", package: "supabase-swift"),
-                "ShovelbaseAnalytics",
+                "ShovelbaseSignals",
                 "ShovelbaseFlags",
             ],
             path: "Sources/Shovelbase"
         ),
-        .target(name: "ShovelbaseAnalytics", path: "Sources/ShovelbaseAnalytics"),
+        .target(name: "ShovelbaseSignals", path: "Sources/ShovelbaseSignals"),
+        // Thin re-export of ShovelbaseSignals; keeps `import ShovelbaseAnalytics`
+        // working after the rename.
+        .target(
+            name: "ShovelbaseAnalytics",
+            dependencies: ["ShovelbaseSignals"],
+            path: "Sources/ShovelbaseAnalytics"
+        ),
         .target(name: "ShovelbaseFlags", path: "Sources/ShovelbaseFlags"),
     ]
 )

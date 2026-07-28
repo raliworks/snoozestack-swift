@@ -1,17 +1,18 @@
 # shovelbase-swift
 
 Swift client for [shovelbase](../README.md) projects on iOS, macOS, tvOS, and
-watchOS — database queries, auth, storage, edge functions, analytics, and
+watchOS — database queries, auth, storage, edge functions, signals, and
 feature flags.
 
 The `Shovelbase` module is a full typed client for your shovelbase project —
 database queries, auth, storage, and edge functions — plus Mixpanel-style
-analytics and feature flags. Three library products:
+signals and feature flags. Three library products:
 
 - **`Shovelbase`** — the full client (`Shovelbase.createClient`, database,
-  auth, storage, functions, `.analytics`, and `.flags`).
-- **`ShovelbaseAnalytics`** — analytics only; a single dependency-free file, if
-  you don't need the database/auth client.
+  auth, storage, functions, `.signals`, and `.flags`).
+- **`ShovelbaseSignals`** — event tracking only; a single dependency-free file,
+  if you don't need the database/auth client. (`ShovelbaseAnalytics` remains as
+  a deprecated alias product.)
 - **`ShovelbaseFlags`** — feature flags only; a single dependency-free file.
 
 ## Install
@@ -74,32 +75,34 @@ try await shovelbase.storage.from("avatars")
 let reply: ChatReply = try await shovelbase.functions
     .invoke("kyd-golf-chat", options: .init(body: ["messages": messages]))
 
-// Analytics (charted on the portal's Observability → Analytics page)
-shovelbase.analytics.identify(user.id.uuidString)
-shovelbase.analytics.track("signup", properties: ["plan": "pro"])
+// Signals (event tracking; charted on the portal's Signals page)
+shovelbase.signals.identify(user.id.uuidString)
+shovelbase.signals.track("signup", properties: ["plan": "pro"])
 
-// Feature flags (toggled on the portal's Analytics → Feature Flags page)
+// Feature flags (toggled on the portal's Feature Flags page)
 if await shovelbase.flags.isEnabled("new-checkout") { /* … */ }
 ```
 
 Supporting types (`Session`, `User`, query/error types, …) come from the same
 `import Shovelbase`. Not supported yet: realtime subscriptions (`.channel()`).
 
-### Analytics behavior
+### Signals behavior
 
 - `track` is fire-and-forget — it never throws and never blocks the caller.
 - Events are persisted to disk, so they survive app kills.
 - Batches flush every 10 s, at 20 queued events, and when the app is
-  backgrounded (tunable via the `analytics:` parameter of `createClient`,
-  or `ShovelbaseAnalytics.Options` standalone).
+  backgrounded (tunable via the `signals:` parameter of `createClient`,
+  or `ShovelbaseSignals.Options` standalone).
 - Each event carries an `insert_id`, so a batch retried after a network
   timeout is never double-counted.
 - Default properties sent with every event: `$os`, `$os_version`,
   `$app_version`, `$sdk`.
 - Property values must be JSON-encodable; anything else is stringified.
 
-Using analytics without the client: add the `ShovelbaseAnalytics` product
-instead and call `ShovelbaseAnalytics.configure(url:apiKey:)` at launch.
+Using signals without the client: add the `ShovelbaseSignals` product
+instead and call `ShovelbaseSignals.configure(url:apiKey:)` at launch.
+(`shovelbase.analytics` and the `ShovelbaseAnalytics` product remain as
+deprecated aliases.)
 
 ### Feature-flag behavior
 
