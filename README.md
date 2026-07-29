@@ -76,8 +76,9 @@ let reply: ChatReply = try await shovelbase.functions
     .invoke("kyd-golf-chat", options: .init(body: ["messages": messages]))
 
 // Signals (event tracking; charted on the portal's Signals page)
-shovelbase.signals.identify(user.id.uuidString)
+shovelbase.signals.identify(user.id.uuidString)  // merges their anonymous history in
 shovelbase.signals.track("signup", properties: ["plan": "pro"])
+shovelbase.signals.reset()                        // on sign-out
 
 // Feature flags (toggled on the portal's Feature Flags page)
 if await shovelbase.flags.isEnabled("new-checkout") { /* … */ }

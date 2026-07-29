@@ -57,6 +57,12 @@ public final class ShovelbaseSignals {
     private static let distinctIdKey = "shovelbase_distinct_id"
     private static let maxBatch = 100 // server-side cap per request
 
+    // Reserved events that assert identity rather than record activity. The
+    // server folds them into its identity graph and leaves them out of charts.
+    private static let identifyEvent = "$identify"
+    private static let aliasEvent = "$alias"
+    private static let resetEvent = "$reset"
+
     private init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
@@ -85,19 +91,45 @@ public final class ShovelbaseSignals {
     // MARK: - Public API
 
     /// Ties subsequent events to your user id (e.g. the auth user id).
+    ///
+    /// The anonymous id in use until now is sent along so the server can merge
+    /// the two — activity from before sign-up and the account it became stay
+    /// one person in every chart and funnel. Safe to call on every launch;
+    /// re-identifying the same id is a no-op.
     public func identify(_ id: String) {
         guard !id.isEmpty else { return }
+        let ts = Self.isoFormatter.string(from: Date())
         queue.async {
+            let previous = self.distinctId
+            guard previous != id else { return }
             self.distinctId = id
             UserDefaults.standard.set(id, forKey: Self.distinctIdKey)
+            self.trackLocked(Self.identifyEvent, ts: ts, properties: ["$anon_id": previous])
         }
     }
 
-    /// Reverts to a fresh anonymous id (call on sign-out).
+    /// Asserts that another id is the same person as the current one, for
+    /// links `identify` doesn't cover. Merging two ids that each already name
+    /// an account is refused.
+    public func alias(_ otherId: String) {
+        guard !otherId.isEmpty else { return }
+        let ts = Self.isoFormatter.string(from: Date())
+        queue.async {
+            guard otherId != self.distinctId else { return }
+            self.trackLocked(Self.aliasEvent, ts: ts, properties: ["$anon_id": otherId])
+        }
+    }
+
+    /// Reverts to a fresh anonymous id (call on sign-out). Sends immediately so
+    /// the next person on a shared device starts clean rather than inheriting
+    /// the identity of whoever just signed out.
     public func reset() {
+        let ts = Self.isoFormatter.string(from: Date())
         queue.async {
             UserDefaults.standard.removeObject(forKey: Self.distinctIdKey)
             self.distinctId = Self.loadOrCreateDistinctId()
+            self.trackLocked(Self.resetEvent, ts: ts, properties: [:])
+            self.flushLocked()
         }
     }
 
@@ -108,23 +140,26 @@ public final class ShovelbaseSignals {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let ts = Self.isoFormatter.string(from: Date())
-        queue.async {
-            guard self.endpoint != nil else { return } // configure() not called
-            var props = Self.defaultProperties
-            for (key, value) in properties { props[key] = Self.jsonSafe(value) }
-            self.events.append([
-                "name": trimmed,
-                "distinct_id": self.distinctId,
-                "ts": ts,
-                "insert_id": UUID().uuidString.lowercased(),
-                "props": props,
-            ])
-            if self.events.count > self.options.maxQueueSize {
-                self.events.removeFirst(self.events.count - self.options.maxQueueSize)
-            }
-            self.persistQueue()
-            if self.events.count >= self.options.batchSize { self.flushLocked() }
+        queue.async { self.trackLocked(trimmed, ts: ts, properties: properties) }
+    }
+
+    /// Queues an event. Must already be running on `queue`.
+    private func trackLocked(_ name: String, ts: String, properties: [String: Any]) {
+        guard endpoint != nil else { return } // configure() not called
+        var props = Self.defaultProperties
+        for (key, value) in properties { props[key] = Self.jsonSafe(value) }
+        events.append([
+            "name": name,
+            "distinct_id": distinctId,
+            "ts": ts,
+            "insert_id": UUID().uuidString.lowercased(),
+            "props": props,
+        ])
+        if events.count > options.maxQueueSize {
+            events.removeFirst(events.count - options.maxQueueSize)
         }
+        persistQueue()
+        if events.count >= options.batchSize { flushLocked() }
     }
 
     /// Sends everything queued now (also called automatically on a timer,
