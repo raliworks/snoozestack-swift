@@ -87,6 +87,38 @@ if await shovelbase.flags.isEnabled("new-checkout") { /* … */ }
 Supporting types (`Session`, `User`, query/error types, …) come from the same
 `import Shovelbase`. Not supported yet: realtime subscriptions (`.channel()`).
 
+### Sign in with Apple, and Hide My Email
+
+Native apps sign in by ID token — pass the credential from
+`ASAuthorizationController` straight through, and the user never leaves the
+app. Use `signInWithIdTokenResolvingPrivateRelay` rather than
+`signInWithIdToken`:
+
+```swift
+let session = try await shovelbase.auth.signInWithIdTokenResolvingPrivateRelay(
+    credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
+)
+session.user.email   // "…@privaterelay.appleid.com", not nil
+```
+
+Apple hands the relay address to your app in the *identity token* on every
+sign-in, but drops it from the credential object after the first
+authorization — so a user whose record was created without it comes back from
+plain `signInWithIdToken` with `user.email == nil`, on that sign-in and on
+every one after it. The `ResolvingPrivateRelay` variant is the same call, plus:
+it reads the token's `email` claim when the session comes back without one,
+and remembers the address on the device so `auth.session` and
+`auth.currentUser` still report it after a token refresh or a relaunch (it is
+dropped on `signOut()`). Everything else is untouched.
+
+The tokens themselves are unchanged — they're issued from the record the auth
+server holds, so anything reading the email server-side (RLS policies, edge
+functions) sees what the server stored, not the resolved address. Store it on
+your own profile row if the backend needs it.
+
+`Shovelbase.emailClaim(fromIdToken:)` exposes the claim read on its own, for
+apps that want the address before exchanging the token.
+
 ### Signals behavior
 
 - `track` is fire-and-forget — it never throws and never blocks the caller.

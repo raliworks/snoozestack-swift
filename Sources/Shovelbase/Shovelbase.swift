@@ -78,7 +78,41 @@ public enum Shovelbase {
         }
         ShovelbaseSignals.configure(url: base, apiKey: key, options: signalsOptions)
         ShovelbaseFlags.configure(url: base, apiKey: key, options: flagsOptions)
-        return ShovelbaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
+
+        // A third-party `accessToken` provider replaces the auth client
+        // entirely (reading `.auth` on such a client is a runtime issue), so
+        // there is no session storage to wrap.
+        guard options.auth.accessToken == nil else {
+            return ShovelbaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
+        }
+
+        // Wrap session storage so a private-relay email resolved by
+        // `auth.signInWithIdTokenResolvingPrivateRelay(credentials:)` survives
+        // token refreshes and relaunches.
+        let relayStorage = PrivateRelayEmailStorage(wrapping: options.auth.storage)
+        let client = ShovelbaseClient(
+            supabaseURL: projectURL,
+            supabaseKey: key,
+            options: ShovelbaseClientOptions(
+                db: options.db,
+                auth: .init(
+                    storage: relayStorage,
+                    redirectToURL: options.auth.redirectToURL,
+                    storageKey: options.auth.storageKey,
+                    flowType: options.auth.flowType,
+                    encoder: options.auth.encoder,
+                    decoder: options.auth.decoder,
+                    autoRefreshToken: options.auth.autoRefreshToken,
+                    emitLocalSessionAsInitialSession: options.auth.emitLocalSessionAsInitialSession
+                ),
+                global: options.global,
+                functions: options.functions,
+                realtime: options.realtime,
+                storage: options.storage
+            )
+        )
+        PrivateRelayEmailStorage.register(relayStorage, for: client.auth)
+        return client
     }
 }
 
