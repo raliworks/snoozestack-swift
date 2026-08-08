@@ -4,8 +4,8 @@ import PackageDescription
 let package = Package(
     name: "shovelbase-swift",
     // Platform floors follow the upstream client 2.x (the Shovelbase target's
-    // dependency); ShovelbaseSignals and ShovelbaseFlags themselves have no
-    // third-party dependencies.
+    // dependency); ShovelbaseSignals, ShovelbaseFlags and ShovelbasePush
+    // themselves have no third-party dependencies.
     platforms: [
         .iOS(.v16),
         .macOS(.v13),
@@ -14,7 +14,7 @@ let package = Package(
     ],
     products: [
         // Full client: database, auth, storage, edge functions (upstream client
-        // API surface re-exported) + signals + feature flags.
+        // API surface re-exported) + signals + feature flags + push.
         .library(name: "Shovelbase", targets: ["Shovelbase"]),
         // Signals (event tracking) only — no third-party dependencies.
         .library(name: "ShovelbaseSignals", targets: ["ShovelbaseSignals"]),
@@ -22,6 +22,8 @@ let package = Package(
         .library(name: "ShovelbaseAnalytics", targets: ["ShovelbaseAnalytics"]),
         // Feature flags only — no third-party dependencies.
         .library(name: "ShovelbaseFlags", targets: ["ShovelbaseFlags"]),
+        // Push notification registration only — no third-party dependencies.
+        .library(name: "ShovelbasePush", targets: ["ShovelbasePush"]),
     ],
     dependencies: [
         .package(url: "https://github.com/supabase/supabase-swift.git", from: "2.0.0"),
@@ -33,6 +35,7 @@ let package = Package(
                 .product(name: "Supabase", package: "supabase-swift"),
                 "ShovelbaseSignals",
                 "ShovelbaseFlags",
+                "ShovelbasePush",
             ],
             path: "Sources/Shovelbase"
         ),
@@ -45,5 +48,6 @@ let package = Package(
             path: "Sources/ShovelbaseAnalytics"
         ),
         .target(name: "ShovelbaseFlags", path: "Sources/ShovelbaseFlags"),
+        .target(name: "ShovelbasePush", path: "Sources/ShovelbasePush"),
     ]
 )

@@ -2,7 +2,7 @@
 //
 // shovelbase runs the standard backend services (PostgREST, GoTrue, storage-api,
 // edge-runtime), so this client IS the upstream client API surface, re-exported
-// with shovelbase defaults plus signals and feature flags:
+// with shovelbase defaults plus signals, feature flags and push:
 //
 //     import Shovelbase
 //
@@ -17,6 +17,7 @@
 //     let reply = try await shovelbase.functions.invoke("kyd-golf-chat")     // edge functions
 //     shovelbase.signals.track("signup", properties: ["plan": "pro"])        // signals
 //     if await shovelbase.flags.isEnabled("new-checkout") { … }              // feature flags
+//     try await shovelbase.push.register(deviceToken: token)                 // push notifications
 //
 // Everything the upstream client exports is re-exported here, so types and
 // helpers (Session, User, PostgrestError, …) come from the same `import Shovelbase`.
@@ -33,6 +34,7 @@ import Foundation
 @_exported import Supabase
 @_exported import ShovelbaseSignals
 @_exported import ShovelbaseFlags
+@_exported import ShovelbasePush
 
 /// The shovelbase client. Alias of the upstream client type; every instance
 /// gains `.analytics` and `.flags` via the extension below. Prefer this name.
@@ -60,9 +62,10 @@ public enum Shovelbase {
     /// (`http://<host>/sb/<ref>`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
-    /// Also configures `ShovelbaseSignals.shared` and `ShovelbaseFlags.shared`
-    /// against the same project, so `client.signals.track(…)` and
-    /// `client.flags.isEnabled(…)` work immediately; `signals` tunes event
+    /// Also configures `ShovelbaseSignals.shared`, `ShovelbaseFlags.shared`
+    /// and `ShovelbasePush.shared` against the same project, so
+    /// `client.signals.track(…)`, `client.flags.isEnabled(…)` and
+    /// `client.push.register(…)` work immediately; `signals` tunes event
     /// batching (flush interval, batch size) and `flags` the snapshot cache.
     public static func createClient(
         url: String,
@@ -78,11 +81,17 @@ public enum Shovelbase {
         }
         ShovelbaseSignals.configure(url: base, apiKey: key, options: signalsOptions)
         ShovelbaseFlags.configure(url: base, apiKey: key, options: flagsOptions)
+        ShovelbasePush.configure(url: base, apiKey: key)
 
         // A third-party `accessToken` provider replaces the auth client
         // entirely (reading `.auth` on such a client is a runtime issue), so
         // there is no session storage to wrap.
         guard options.auth.accessToken == nil else {
+            // That provider *is* the session here, so push registration takes
+            // the user's identity from it too.
+            if let provider = options.auth.accessToken {
+                ShovelbasePush.shared.accessTokenProvider = { try? await provider() }
+            }
             return ShovelbaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
         }
 
@@ -112,6 +121,13 @@ public enum Shovelbase {
             )
         )
         PrivateRelayEmailStorage.register(relayStorage, for: client.auth)
+        // Lets push.register() attach the current access token, so the server
+        // can bind the device to the signed-in user. Weak: the shared push
+        // object outlives any one client and must not keep it alive.
+        ShovelbasePush.shared.accessTokenProvider = { [weak client] in
+            guard let client else { return nil }
+            return try? await client.auth.session.accessToken
+        }
         return client
     }
 }
@@ -130,4 +146,12 @@ extension ShovelbaseClient {
     /// Alias for `ShovelbaseFlags.shared` (configured by
     /// `Shovelbase.createClient`).
     public var flags: ShovelbaseFlags { ShovelbaseFlags.shared }
+
+    /// Push notification registration. Alias for `ShovelbasePush.shared`
+    /// (configured by `Shovelbase.createClient`, including the access-token
+    /// provider that binds a device to the signed-in user).
+    ///
+    /// There is no send method: pushes are sent server-side, off a queue
+    /// trigger, because a client that could enqueue one could notify anybody.
+    public var push: ShovelbasePush { ShovelbasePush.shared }
 }
