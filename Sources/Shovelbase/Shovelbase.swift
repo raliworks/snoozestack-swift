@@ -2,7 +2,7 @@
 //
 // shovelbase runs the standard backend services (PostgREST, GoTrue, storage-api,
 // edge-runtime), so this client IS the upstream client API surface, re-exported
-// with shovelbase defaults plus signals, feature flags and push:
+// with shovelbase defaults plus signals and push:
 //
 //     import Shovelbase
 //
@@ -16,7 +16,6 @@
 //     try await shovelbase.storage.from("avatars").upload(path, data: data)  // storage
 //     let reply = try await shovelbase.functions.invoke("kyd-golf-chat")     // edge functions
 //     shovelbase.signals.track("signup", properties: ["plan": "pro"])        // signals
-//     if await shovelbase.flags.isEnabled("new-checkout") { … }              // feature flags
 //     try await shovelbase.push.register(deviceToken: token)                 // push notifications
 //
 // Everything the upstream client exports is re-exported here, so types and
@@ -33,14 +32,13 @@
 import Foundation
 @_exported import Supabase
 @_exported import ShovelbaseSignals
-@_exported import ShovelbaseFlags
 @_exported import ShovelbasePush
 
 /// The shovelbase client. Alias of the upstream client type; every instance
-/// gains `.analytics` and `.flags` via the extension below. Prefer this name.
+/// gains `.analytics` via the extension below. Prefer this name.
 public typealias ShovelbaseClient = SupabaseClient
 
-/// Options for ``Shovelbase/createClient(url:key:options:analytics:flags:)``.
+/// Options for ``Shovelbase/createClient(url:key:options:analytics:)``.
 /// Alias of the upstream client options. Prefer this name.
 public typealias ShovelbaseClientOptions = SupabaseClientOptions
 
@@ -62,17 +60,15 @@ public enum Shovelbase {
     /// (`http://<host>/sb/<ref>`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
-    /// Also configures `ShovelbaseSignals.shared`, `ShovelbaseFlags.shared`
-    /// and `ShovelbasePush.shared` against the same project, so
-    /// `client.signals.track(…)`, `client.flags.isEnabled(…)` and
+    /// Also configures `ShovelbaseSignals.shared` and `ShovelbasePush.shared`
+    /// against the same project, so `client.signals.track(…)` and
     /// `client.push.register(…)` work immediately; `signals` tunes event
-    /// batching (flush interval, batch size) and `flags` the snapshot cache.
+    /// batching (flush interval, batch size).
     public static func createClient(
         url: String,
         key: String,
         options: ShovelbaseClientOptions = .init(),
-        signals signalsOptions: ShovelbaseSignals.Options = .init(),
-        flags flagsOptions: ShovelbaseFlags.Options = .init()
+        signals signalsOptions: ShovelbaseSignals.Options = .init()
     ) -> ShovelbaseClient {
         var base = url
         while base.hasSuffix("/") { base.removeLast() }
@@ -80,7 +76,6 @@ public enum Shovelbase {
             preconditionFailure("Shovelbase.createClient(url:key:) requires the project URL and an API key")
         }
         ShovelbaseSignals.configure(url: base, apiKey: key, options: signalsOptions)
-        ShovelbaseFlags.configure(url: base, apiKey: key, options: flagsOptions)
         ShovelbasePush.configure(url: base, apiKey: key)
 
         // A third-party `accessToken` provider replaces the auth client
@@ -141,11 +136,6 @@ extension ShovelbaseClient {
     /// Deprecated alias of ``signals``.
     @available(*, deprecated, renamed: "signals")
     public var analytics: ShovelbaseSignals { ShovelbaseSignals.shared }
-
-    /// Feature flags toggled on the portal's Analytics → Feature Flags page.
-    /// Alias for `ShovelbaseFlags.shared` (configured by
-    /// `Shovelbase.createClient`).
-    public var flags: ShovelbaseFlags { ShovelbaseFlags.shared }
 
     /// Push notification registration. Alias for `ShovelbasePush.shared`
     /// (configured by `Shovelbase.createClient`, including the access-token

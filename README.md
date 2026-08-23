@@ -1,19 +1,17 @@
 # shovelbase-swift
 
 Swift client for [shovelbase](../README.md) projects on iOS, macOS, tvOS, and
-watchOS — database queries, auth, storage, edge functions, signals, and
-feature flags.
+watchOS — database queries, auth, storage, edge functions, and signals.
 
 The `Shovelbase` module is a full typed client for your shovelbase project —
 database queries, auth, storage, and edge functions — plus Mixpanel-style
-signals and feature flags. Three library products:
+signals. Two library products:
 
 - **`Shovelbase`** — the full client (`Shovelbase.createClient`, database,
-  auth, storage, functions, `.signals`, and `.flags`).
+  auth, storage, functions, and `.signals`).
 - **`ShovelbaseSignals`** — event tracking only; a single dependency-free file,
   if you don't need the database/auth client. (`ShovelbaseAnalytics` remains as
   a deprecated alias product.)
-- **`ShovelbaseFlags`** — feature flags only; a single dependency-free file.
 
 ## Install
 
@@ -79,9 +77,6 @@ let reply: ChatReply = try await shovelbase.functions
 shovelbase.signals.identify(user.id.uuidString)  // merges their anonymous history in
 shovelbase.signals.track("signup", properties: ["plan": "pro"])
 shovelbase.signals.reset()                        // on sign-out
-
-// Feature flags (toggled on the portal's Feature Flags page)
-if await shovelbase.flags.isEnabled("new-checkout") { /* … */ }
 ```
 
 Supporting types (`Session`, `User`, query/error types, …) come from the same
@@ -136,16 +131,3 @@ Using signals without the client: add the `ShovelbaseSignals` product
 instead and call `ShovelbaseSignals.configure(url:apiKey:)` at launch.
 (`shovelbase.analytics` and the `ShovelbaseAnalytics` product remain as
 deprecated aliases.)
-
-### Feature-flag behavior
-
-- Lookups never throw: the snapshot is cached for 60 s (tunable via the
-  `flags:` parameter of `createClient`, or `ShovelbaseFlags.Options`
-  standalone); offline they serve the last snapshot, and before the first
-  fetch they return the fallback you pass (`isEnabled(_:fallback:)`).
-- `getAll()` returns the whole snapshot, `refresh()` bypasses the cache, and
-  `peek(_:fallback:)` reads the last-known value synchronously (for render
-  paths that can't await).
-
-Using flags without the client: add the `ShovelbaseFlags` product instead and
-call `ShovelbaseFlags.configure(url:apiKey:)` at launch.
