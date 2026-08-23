@@ -57,10 +57,6 @@ let shovelbase = Shovelbase.createClient(
     key: "<SHOVELBASE_ANON_KEY>"
 )
 
-// Database (with row-level security)
-let clubs: [Club] = try await shovelbase.from("clubs")
-    .select().eq("in_bag", value: true).execute().value
-
 // Auth
 try await shovelbase.auth.signUp(email: email, password: password)
 let user = try await shovelbase.auth.session.user

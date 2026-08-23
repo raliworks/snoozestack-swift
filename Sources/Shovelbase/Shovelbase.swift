@@ -1,7 +1,8 @@
 // Shovelbase — Swift client for shovelbase projects.
 //
-// shovelbase runs the standard backend services (PostgREST, GoTrue, storage-api,
-// edge-runtime), so this client IS the upstream client API surface, re-exported
+// shovelbase runs GoTrue + storage-api + edge-runtime — no PostgREST as of
+// #123 (see ../../../docs/migrations/postgrest-removal.md) — so this client
+// is the upstream client's auth/storage/functions API surface, re-exported
 // with shovelbase defaults plus signals and push:
 //
 //     import Shovelbase
@@ -11,15 +12,20 @@
 //         key: "<SHOVELBASE_ANON_KEY>"
 //     )
 //
-//     let clubs: [Club] = try await shovelbase.from("clubs").select().execute().value
 //     try await shovelbase.auth.signIn(email: email, password: password)     // auth
 //     try await shovelbase.storage.from("avatars").upload(path, data: data)  // storage
 //     let reply = try await shovelbase.functions.invoke("kyd-golf-chat")     // edge functions
 //     shovelbase.signals.track("signup", properties: ["plan": "pro"])        // signals
 //     try await shovelbase.push.register(deviceToken: token)                 // push notifications
 //
-// Everything the upstream client exports is re-exported here, so types and
-// helpers (Session, User, PostgrestError, …) come from the same `import Shovelbase`.
+// TODO(#123 follow-up): unlike shovelbase-js, this client does not yet refuse
+// `shovelbase.from(...)` (the query builder) at the API layer — it still
+// compiles and will fail at the network with a 404 (no /rest/v1 route left)
+// instead of a clear error. Read or write the database from a committed
+// function's own connection instead.
+//
+// Everything else the upstream client exports is re-exported here, so types
+// and helpers (Session, User, …) come from the same `import Shovelbase`.
 // The upstream `Supabase*`-branded types are also surfaced under shovelbase
 // names (e.g. `ShovelbaseClient`, `ShovelbaseClientOptions`) — prefer those.
 //
