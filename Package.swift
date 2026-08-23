@@ -45,5 +45,15 @@ let package = Package(
             path: "Sources/ShovelbaseAnalytics"
         ),
         .target(name: "ShovelbasePush", path: "Sources/ShovelbasePush"),
+        // Smoke tests: the wrapper forwards the upstream client correctly, and
+        // .from()/.schema()/.rpc() genuinely fail to compile with an actionable
+        // message (see ShovelbaseClientTests.swift for how the latter is proven
+        // — it shells out to swiftc, since a compile failure can't be asserted
+        // on from inside the same compilation).
+        .testTarget(
+            name: "ShovelbaseTests",
+            dependencies: ["Shovelbase"],
+            path: "Tests/ShovelbaseTests"
+        ),
     ]
 )

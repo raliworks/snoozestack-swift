@@ -1,11 +1,17 @@
 # shovelbase-swift
 
 Swift client for [shovelbase](../README.md) projects on iOS, macOS, tvOS, and
-watchOS — database queries, auth, storage, edge functions, and signals.
+watchOS — auth, storage, edge functions, and signals. No client-side database
+query builder (`.from()`/`.schema()`/`.rpc()` were removed with PostgREST —
+see `../docs/migrations/postgrest-removal.md`): read or write the database
+from a committed function instead, over its own `SHOVELBASE_DB_URL`. Calling
+any of the three is a compile error pointing at that guide — `ShovelbaseClient`
+wraps the upstream client rather than aliasing it specifically so they aren't
+on its type surface (see `Shovelbase.swift`'s header comment).
 
 The `Shovelbase` module is a full typed client for your shovelbase project —
-database queries, auth, storage, and edge functions — plus Mixpanel-style
-signals. Two library products:
+auth, storage, and edge functions — plus Mixpanel-style signals. Two library
+products:
 
 - **`Shovelbase`** — the full client (`Shovelbase.createClient`, database,
   auth, storage, functions, and `.signals`).
@@ -77,6 +83,8 @@ shovelbase.signals.reset()                        // on sign-out
 
 Supporting types (`Session`, `User`, query/error types, …) come from the same
 `import Shovelbase`. Not supported yet: realtime subscriptions (`.channel()`).
+Removed for good: `.from()`/`.schema()`/`.rpc()` (PostgREST) — calling one is
+a compile error with a pointer to the replacement pattern.
 
 ### Sign in with Apple, and Hide My Email
 

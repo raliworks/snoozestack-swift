@@ -18,20 +18,29 @@
 //     shovelbase.signals.track("signup", properties: ["plan": "pro"])        // signals
 //     try await shovelbase.push.register(deviceToken: token)                 // push notifications
 //
-// TODO(#123 follow-up): unlike shovelbase-js, this client does not yet refuse
-// `shovelbase.from(...)` (the query builder) at the API layer — it still
-// compiles and will fail at the network with a 404 (no /rest/v1 route left)
-// instead of a clear error. Read or write the database from a committed
-// function's own connection instead.
+// No `.from()`/`.schema()`/`.rpc()` — those were PostgREST's query builder,
+// and PostgREST is gone (#123). `ShovelbaseClient` wraps the upstream client
+// rather than aliasing it specifically so those three names are not on this
+// type's surface at all: calling one is a compile error, with a message
+// pointing at ../../../docs/migrations/postgrest-removal.md and the
+// replacement (a committed function reading/writing Postgres directly over
+// its own `SHOVELBASE_DB_URL`, invoked via `shovelbase.functions.invoke(...)`)
+// — see the `@available(*, unavailable)` overloads below. Mirrors
+// `disableQueryBuilder()` in shovelbase-js (sdk/src/index.js) in spirit, not
+// literally: Swift can enforce this at compile time, where JS — dynamically
+// typed at the call site — only gets a runtime throw.
 //
 // Everything else the upstream client exports is re-exported here, so types
 // and helpers (Session, User, …) come from the same `import Shovelbase`.
 // The upstream `Supabase*`-branded types are also surfaced under shovelbase
-// names (e.g. `ShovelbaseClient`, `ShovelbaseClientOptions`) — prefer those.
+// names (e.g. `ShovelbaseClientOptions`) — prefer those.
 //
 // (Swift's `@_exported import` is all-or-nothing, so the upstream `Supabase*`
-// names stay visible alongside the aliases; they can't be hidden without
-// dropping the whole re-exported surface.)
+// names — including the raw `SupabaseClient` class, whose `.from`/`.schema`/
+// `.rpc` are still there — stay visible alongside the aliases; they can't be
+// hidden without dropping the whole re-exported surface. `ShovelbaseClient`
+// is the supported entry point; reaching for `SupabaseClient` directly to get
+// the query builder back is exactly the kind of thing this file is refusing.)
 //
 // Note: realtime subscriptions (`.channel()`) are not supported by shovelbase
 // yet; everything else behaves exactly like the upstream client.
@@ -40,11 +49,97 @@ import Foundation
 @_exported import ShovelbaseSignals
 @_exported import ShovelbasePush
 
-/// The shovelbase client. Alias of the upstream client type; every instance
-/// gains `.analytics` via the extension below. Prefer this name.
-public typealias ShovelbaseClient = SupabaseClient
+/// The shovelbase client. Wraps the upstream `SupabaseClient` — see this
+/// file's header comment for why it's a wrapper and not a `typealias` — and
+/// gains `.analytics`/`.signals`/`.push` via the extensions below.
+public final class ShovelbaseClient: Sendable {
+    /// The wrapped upstream client. An escape hatch for upstream API this
+    /// type doesn't forward — not where to reach for `.from`/`.schema`/
+    /// `.rpc`; those are gone for good, see this file's header.
+    public let base: SupabaseClient
 
-/// Options for ``Shovelbase/createClient(url:key:options:analytics:)``.
+    init(base: SupabaseClient) {
+        self.base = base
+    }
+
+    /// The Auth client for managing user sessions and authentication.
+    public var auth: AuthClient { base.auth }
+
+    /// The Storage client for uploading, downloading, and managing files.
+    public var storage: ShovelbaseStorageClient { base.storage }
+
+    /// The Functions client for invoking edge functions.
+    public var functions: FunctionsClient { base.functions }
+
+    /// The Realtime client. Not supported by shovelbase yet — see this
+    /// file's header comment.
+    public var realtimeV2: RealtimeClientV2 { base.realtimeV2 }
+
+    /// All active Realtime channels.
+    public var channels: [RealtimeChannelV2] { base.channels }
+
+    /// The HTTP headers included in every request made by sub-clients.
+    public var headers: [String: String] { base.headers }
+
+    /// Creates a Realtime channel. Not supported by shovelbase yet — see
+    /// this file's header comment.
+    public func channel(
+        _ name: String,
+        options: @Sendable (inout RealtimeChannelConfig) -> Void = { _ in }
+    ) -> RealtimeChannelV2 {
+        base.channel(name, options: options)
+    }
+
+    /// Unsubscribes from and removes a Realtime channel.
+    public func removeChannel(_ channel: RealtimeChannelV2) async {
+        await base.removeChannel(channel)
+    }
+
+    /// Unsubscribes from and removes all active Realtime channels.
+    public func removeAllChannels() async {
+        await base.removeAllChannels()
+    }
+
+    /// Completes an OAuth/magic-link deep link. See the upstream
+    /// `SupabaseClient.handle(_:)` doc for app-lifecycle wiring examples.
+    public func handle(_ url: URL) {
+        base.handle(url)
+    }
+}
+
+// PostgREST's query-builder entry points on the upstream client — removed at
+// the network layer (#123 — /rest/v1 404s at the portal) and, here, from
+// `ShovelbaseClient`'s type surface entirely. Redeclaring the same names as
+// `unavailable` turns a call into a compile error carrying this message,
+// instead of either compiling into a request that 404s (the pre-#151 state)
+// or a runtime throw a caller only hits by exercising the code path.
+extension ShovelbaseClient {
+    @available(
+        *, unavailable,
+        message: "shovelbase.from(...) was removed along with PostgREST — see docs/migrations/postgrest-removal.md. Query or write the database from a committed function (it already has SHOVELBASE_DB_URL) and call it with shovelbase.functions.invoke(...) instead."
+    )
+    public func from(_ table: String) -> Never { fatalError() }
+
+    @available(
+        *, unavailable,
+        message: "shovelbase.schema(...) was removed along with PostgREST — see docs/migrations/postgrest-removal.md. Query or write the database from a committed function (it already has SHOVELBASE_DB_URL) and call it with shovelbase.functions.invoke(...) instead."
+    )
+    public func schema(_ schema: String) -> Never { fatalError() }
+
+    @available(
+        *, unavailable,
+        message: "shovelbase.rpc(...) was removed along with PostgREST — see docs/migrations/postgrest-removal.md. Query or write the database from a committed function (it already has SHOVELBASE_DB_URL) and call it with shovelbase.functions.invoke(...) instead."
+    )
+    public func rpc(_ fn: String, params: some Encodable, count: CountOption? = nil) -> Never { fatalError() }
+
+    @available(
+        *, unavailable,
+        message: "shovelbase.rpc(...) was removed along with PostgREST — see docs/migrations/postgrest-removal.md. Query or write the database from a committed function (it already has SHOVELBASE_DB_URL) and call it with shovelbase.functions.invoke(...) instead."
+    )
+    public func rpc(_ fn: String, count: CountOption? = nil) -> Never { fatalError() }
+}
+
+/// Options for ``Shovelbase/createClient(url:key:options:signals:)``.
 /// Alias of the upstream client options. Prefer this name.
 public typealias ShovelbaseClientOptions = SupabaseClientOptions
 
@@ -93,14 +188,16 @@ public enum Shovelbase {
             if let provider = options.auth.accessToken {
                 ShovelbasePush.shared.accessTokenProvider = { try? await provider() }
             }
-            return ShovelbaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
+            return ShovelbaseClient(
+                base: SupabaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
+            )
         }
 
         // Wrap session storage so a private-relay email resolved by
         // `auth.signInWithIdTokenResolvingPrivateRelay(credentials:)` survives
         // token refreshes and relaunches.
         let relayStorage = PrivateRelayEmailStorage(wrapping: options.auth.storage)
-        let client = ShovelbaseClient(
+        let supabase = SupabaseClient(
             supabaseURL: projectURL,
             supabaseKey: key,
             options: ShovelbaseClientOptions(
@@ -121,6 +218,7 @@ public enum Shovelbase {
                 storage: options.storage
             )
         )
+        let client = ShovelbaseClient(base: supabase)
         PrivateRelayEmailStorage.register(relayStorage, for: client.auth)
         // Lets push.register() attach the current access token, so the server
         // can bind the device to the signed-in user. Weak: the shared push
