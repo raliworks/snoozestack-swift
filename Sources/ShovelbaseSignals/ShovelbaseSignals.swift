@@ -104,7 +104,7 @@ public final class ShovelbaseSignals {
             guard previous != id else { return }
             self.distinctId = id
             UserDefaults.standard.set(id, forKey: Self.distinctIdKey)
-            self.trackLocked(Self.identifyEvent, ts: ts, properties: ["$anon_id": previous])
+            self.trackLocked("event", Self.identifyEvent, ts: ts, properties: ["$anon_id": previous])
         }
     }
 
@@ -116,7 +116,7 @@ public final class ShovelbaseSignals {
         let ts = Self.isoFormatter.string(from: Date())
         queue.async {
             guard otherId != self.distinctId else { return }
-            self.trackLocked(Self.aliasEvent, ts: ts, properties: ["$anon_id": otherId])
+            self.trackLocked("event", Self.aliasEvent, ts: ts, properties: ["$anon_id": otherId])
         }
     }
 
@@ -128,7 +128,7 @@ public final class ShovelbaseSignals {
         queue.async {
             UserDefaults.standard.removeObject(forKey: Self.distinctIdKey)
             self.distinctId = Self.loadOrCreateDistinctId()
-            self.trackLocked(Self.resetEvent, ts: ts, properties: [:])
+            self.trackLocked("event", Self.resetEvent, ts: ts, properties: [:])
             self.flushLocked()
         }
     }
@@ -137,24 +137,67 @@ public final class ShovelbaseSignals {
     /// Property values must be JSON-encodable (String/number/Bool/array/dict);
     /// anything else is stored via `String(describing:)`.
     public func track(_ name: String, properties: [String: Any] = [:]) {
+        enqueue("event", name, properties: properties)
+    }
+
+    /// Queues a log signal — not attributed to a user (no distinct_id).
+    /// Reserved `properties` keys: `level`, `source`. Fire-and-forget: never
+    /// throws.
+    public func log(_ message: String, properties: [String: Any] = [:]) {
+        enqueue("log", message, properties: properties)
+    }
+
+    /// Queues a metric signal — not attributed to a user (no distinct_id).
+    /// `value` is required; reserved `properties` key: `unit`.
+    /// Fire-and-forget: never throws.
+    public func metric(_ name: String, value: Double, properties: [String: Any] = [:]) {
+        guard value.isFinite else { return }
+        var props = properties
+        props["value"] = value
+        enqueue("metric", name, properties: props)
+    }
+
+    /// Queues a trace signal — not attributed to a user (no distinct_id).
+    /// Reserved `properties` keys: `span_id`, `parent_span_id`,
+    /// `duration_ms`. Fire-and-forget: never throws.
+    public func trace(_ name: String, properties: [String: Any] = [:]) {
+        enqueue("trace", name, properties: properties)
+    }
+
+    /// Queues an audit signal — not attributed to a user via distinct_id; put
+    /// the actor in `properties["actor"]` instead. `action` is conventionally
+    /// a dotted key, e.g. `"billing.plan.changed"`. Fire-and-forget: never
+    /// throws.
+    public func audit(_ action: String, properties: [String: Any] = [:]) {
+        enqueue("audit", action, properties: properties)
+    }
+
+    /// Queues one signal of any type. Trims and drops on an empty name, same
+    /// as the original `track`.
+    private func enqueue(_ type: String, _ name: String, properties: [String: Any]) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let ts = Self.isoFormatter.string(from: Date())
-        queue.async { self.trackLocked(trimmed, ts: ts, properties: properties) }
+        queue.async { self.trackLocked(type, trimmed, ts: ts, properties: properties) }
     }
 
-    /// Queues an event. Must already be running on `queue`.
-    private func trackLocked(_ name: String, ts: String, properties: [String: Any]) {
+    /// Queues one signal. Must already be running on `queue`. Identity
+    /// stitching (distinct_id) is only ever attached to type "event" — the
+    /// portal's ingest route scopes it the same way, so this just keeps the
+    /// wire payload matching what it stores.
+    private func trackLocked(_ type: String, _ name: String, ts: String, properties: [String: Any]) {
         guard endpoint != nil else { return } // configure() not called
         var props = Self.defaultProperties
         for (key, value) in properties { props[key] = Self.jsonSafe(value) }
-        events.append([
+        var signal: [String: Any] = [
+            "type": type,
             "name": name,
-            "distinct_id": distinctId,
             "ts": ts,
             "insert_id": UUID().uuidString.lowercased(),
             "props": props,
-        ])
+        ]
+        if type == "event" { signal["distinct_id"] = distinctId }
+        events.append(signal)
         if events.count > options.maxQueueSize {
             events.removeFirst(events.count - options.maxQueueSize)
         }
