@@ -58,8 +58,14 @@ public final class ShovelbaseClient: Sendable {
     /// `.rpc`; those are gone for good, see this file's header.
     public let base: SupabaseClient
 
-    init(base: SupabaseClient) {
+    /// Magic link, OAuth, sessions and sign-out for this project's own
+    /// hosted application (#101) — not `.auth` (GoTrue), a separate,
+    /// project-scoped end-user population. See AppIdentity.swift.
+    public let identity: ShovelbaseIdentity
+
+    init(base: SupabaseClient, identity: ShovelbaseIdentity) {
         self.base = base
+        self.identity = identity
     }
 
     /// The Auth client for managing user sessions and authentication.
@@ -68,8 +74,11 @@ public final class ShovelbaseClient: Sendable {
     /// The Storage client for uploading, downloading, and managing files.
     public var storage: ShovelbaseStorageClient { base.storage }
 
-    /// The Functions client for invoking edge functions.
-    public var functions: FunctionsClient { base.functions }
+    /// The Functions client for invoking edge functions. Wraps the upstream
+    /// FunctionsClient so a call automatically carries `.identity`'s current
+    /// session (`Authorization: Bearer <session_token>`) once one exists —
+    /// see FunctionsClient.swift.
+    public var functions: ShovelbaseFunctionsClient { ShovelbaseFunctionsClient(base: base.functions, identity: identity) }
 
     /// The Realtime client. Not supported by shovelbase yet — see this
     /// file's header comment.
@@ -164,12 +173,15 @@ public enum Shovelbase {
     /// Also configures `ShovelbaseSignals.shared` and `ShovelbasePush.shared`
     /// against the same project, so `client.signals.track(…)` and
     /// `client.push.register(…)` work immediately; `signals` tunes event
-    /// batching (flush interval, batch size).
+    /// batching (flush interval, batch size); `identity` tunes the
+    /// application-identity client (namespace, session storage,
+    /// auto-refresh — see `ShovelbaseIdentity.Options`).
     public static func createClient(
         url: String,
         key: String,
         options: ShovelbaseClientOptions = .init(),
-        signals signalsOptions: ShovelbaseSignals.Options = .init()
+        signals signalsOptions: ShovelbaseSignals.Options = .init(),
+        identity identityOptions: ShovelbaseIdentity.Options = .init()
     ) -> ShovelbaseClient {
         var base = url
         while base.hasSuffix("/") { base.removeLast() }
@@ -178,6 +190,7 @@ public enum Shovelbase {
         }
         ShovelbaseSignals.configure(url: base, apiKey: key, options: signalsOptions)
         ShovelbasePush.configure(url: base, apiKey: key)
+        let identity = ShovelbaseIdentity(url: base, apiKey: key, options: identityOptions)
 
         // A third-party `accessToken` provider replaces the auth client
         // entirely (reading `.auth` on such a client is a runtime issue), so
@@ -189,7 +202,8 @@ public enum Shovelbase {
                 ShovelbasePush.shared.accessTokenProvider = { try? await provider() }
             }
             return ShovelbaseClient(
-                base: SupabaseClient(supabaseURL: projectURL, supabaseKey: key, options: options)
+                base: SupabaseClient(supabaseURL: projectURL, supabaseKey: key, options: options),
+                identity: identity
             )
         }
 
@@ -218,7 +232,7 @@ public enum Shovelbase {
                 storage: options.storage
             )
         )
-        let client = ShovelbaseClient(base: supabase)
+        let client = ShovelbaseClient(base: supabase, identity: identity)
         PrivateRelayEmailStorage.register(relayStorage, for: client.auth)
         // Lets push.register() attach the current access token, so the server
         // can bind the device to the signed-in user. Weak: the shared push

@@ -86,6 +86,37 @@ Supporting types (`Session`, `User`, query/error types, …) come from the same
 Removed for good: `.from()`/`.schema()`/`.rpc()` (PostgREST) — calling one is
 a compile error with a pointer to the replacement pattern.
 
+### Application identity (magic link, OAuth, sessions)
+
+`.identity` is a separate, project-scoped end-user population from `.auth`
+(GoTrue) — sign-in for your own hosted application's users, not shovelbase
+operators. See `../docs/app-identity-client-contract.md` for the full state
+machine and error taxonomy (shared with the JS SDK).
+
+```swift
+try await shovelbase.identity.requestMagicLink(
+    email: email, redirectTo: "https://myapp.example.com/callback"
+)
+// ... user clicks the emailed link; your app opens on
+//     https://myapp.example.com/callback?token=... ...
+let result = try await shovelbase.identity.completeMagicLink(token: token)
+result.user.email
+
+// shovelbase.functions.invoke(...) automatically carries
+// `.identity`'s session once one exists — no extra wiring needed.
+let reply: ChatReply = try await shovelbase.functions.invoke("kyd-golf-chat", body: ["messages": messages])
+
+await shovelbase.identity.signOut()
+```
+
+OAuth: `startOAuth(provider:redirectTo:)` returns the authorize URL to open
+(`ASWebAuthenticationSession` or `UIApplication.open(_:)`); your app's
+universal-link handler passes the resulting `redirectTo` URL to
+`completeOAuthCallback(url:)`.
+
+`shovelbase.identity.onStateChange { state, session, user in ... }` observes
+`.anonymous` / `.pending` / `.authenticated` / `.expired` reactively.
+
 ### Sign in with Apple, and Hide My Email
 
 Native apps sign in by ID token — pass the credential from
