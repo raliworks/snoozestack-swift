@@ -90,6 +90,27 @@ private func jsonData(_ object: Any) -> Data {
   try! JSONSerialization.data(withJSONObject: object)
 }
 
+extension URLRequest {
+  /// URLSession moves a POST body from `httpBody` into `httpBodyStream` by
+  /// the time a custom URLProtocol observes the request, at least under
+  /// this toolchain — reading the stream directly is what actually
+  /// recovers it for a mock handler that wants to assert on the request.
+  fileprivate func bodyData() -> Data {
+    guard let stream = httpBodyStream else { return httpBody ?? Data() }
+    stream.open()
+    defer { stream.close() }
+    var data = Data()
+    let bufferSize = 4096
+    var buffer = [UInt8](repeating: 0, count: bufferSize)
+    while stream.hasBytesAvailable {
+      let read = stream.read(&buffer, maxLength: bufferSize)
+      if read <= 0 { break }
+      data.append(buffer, count: read)
+    }
+    return data
+  }
+}
+
 private func makeIdentity(namespace: String = "default", storage: any ShovelbaseIdentityStorage = InMemoryIdentityStorage()) -> ShovelbaseIdentity {
   ShovelbaseIdentity(
     url: BASE, apiKey: KEY,
@@ -105,8 +126,9 @@ final class AppIdentityContractTests: XCTestCase {
   func testContractFixtureHasEveryTaxonomyCode() {
     let codes = Set(Contract.errorCodes)
     let enumCodes: Set<String> = [
-      "invalid_redirect", "rate_limited", "invalid_or_expired_link", "invalid_or_expired_session",
+      "invalid_redirect", "invalid_continuation", "rate_limited", "invalid_or_expired_link", "invalid_or_expired_session",
       "oauth_denied", "missing_code", "oauth_failed", "network_error", "not_configured", "server_error",
+      "invalid_credentials", "password_too_weak", // email/password (R5, #232)
     ]
     XCTAssertEqual(codes, enumCodes)
   }
@@ -200,8 +222,83 @@ final class AppIdentityContractTests: XCTestCase {
     let query = Dictionary(uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value) })
     XCTAssertEqual(query["apikey"] ?? nil, KEY)
     XCTAssertEqual(query["redirect_to"] ?? nil, "https://app.example.com/callback")
+    XCTAssertNil(query["continue_to"] ?? nil, "omitted entirely when not given")
     XCTAssertEqual(query["namespace"] ?? nil, "preview:pr-42")
     XCTAssertEqual(identity.state, .pending)
+  }
+
+  // Redirect-safe sign-in continuation (#174): see this file's own header
+  // comment and docs/shareable-urls.md for the mechanism.
+
+  func testRequestMagicLinkIncludesContinueToOnlyWhenGiven() async throws {
+    let fixture = Contract.route("magicLinkRequest")
+    let success = fixture["success"] as! [String: Any]
+    var seenBody: [String: Any]?
+    MockURLProtocol.handler = { request in
+      seenBody = try? JSONSerialization.jsonObject(with: request.bodyData()) as? [String: Any]
+      return (success["status"] as! Int, jsonData(success["body"] as! [String: Any]))
+    }
+    let identity = makeIdentity()
+    try await identity.requestMagicLink(
+      email: "person@example.com", redirectTo: "https://app.example.com/callback",
+      continueTo: "https://app.example.com/reports/42"
+    )
+    XCTAssertEqual(seenBody?["continue_to"] as? String, "https://app.example.com/reports/42")
+  }
+
+  func testRequestMagicLinkMapsRejectedContinueToInvalidContinuation() async throws {
+    let fixture = Contract.route("magicLinkRequest")
+    let errors = fixture["errors"] as! [[String: Any]]
+    let errorCase = errors.first { ($0["code"] as! String) == "invalid_continuation" }!
+    MockURLProtocol.handler = { _ in (errorCase["status"] as! Int, jsonData(errorCase["body"] as! [String: Any])) }
+    let identity = makeIdentity()
+    do {
+      try await identity.requestMagicLink(
+        email: "x@example.com", redirectTo: "https://app.example.com/callback",
+        continueTo: "https://evil.example.com/x"
+      )
+      XCTFail("expected invalid_continuation to be thrown")
+    } catch let error as ShovelbaseIdentityError {
+      XCTAssertEqual(error.code, .invalidContinuation)
+    }
+  }
+
+  func testCompleteMagicLinkSurfacesContinueToFromVerifyResponse() async throws {
+    let fixture = Contract.route("magicLinkVerify")
+    var body = ((fixture["success"] as! [String: Any])["body"] as! [String: Any])
+    body["continue_to"] = "https://app.example.com/reports/42"
+    MockURLProtocol.handler = { _ in (200, jsonData(body)) }
+    let identity = makeIdentity()
+    let result = try await identity.completeMagicLink(token: "deadbeef")
+    XCTAssertEqual(result.continueTo, "https://app.example.com/reports/42")
+  }
+
+  func testStartOAuthIncludesContinueToWhenGiven() {
+    let identity = makeIdentity()
+    let url = identity.startOAuth(
+      provider: "google", redirectTo: "https://app.example.com/callback",
+      continueTo: "https://app.example.com/reports/42"
+    )
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+    let query = Dictionary(uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value) })
+    XCTAssertEqual(query["continue_to"] ?? nil, "https://app.example.com/reports/42")
+  }
+
+  func testCompleteOAuthCallbackSurfacesContinueToFromFragmentOrNilWhenAbsent() async throws {
+    let fixture = Contract.route("oauthCallback")
+    let fragmentDict = ((fixture["success"] as! [String: Any])["redirectFragment"] as! [String: String])
+
+    var withContinuation = fragmentDict
+    withContinuation["continue_to"] = "https://app.example.com/reports/42"
+    let withFragment = withContinuation.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+    let withIdentity = makeIdentity()
+    let withResult = try await withIdentity.completeOAuthCallback(url: URL(string: "https://app.example.com/callback#\(withFragment)")!)
+    XCTAssertEqual(withResult.continueTo, "https://app.example.com/reports/42")
+
+    let withoutFragment = fragmentDict.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
+    let withoutIdentity = makeIdentity()
+    let withoutResult = try await withoutIdentity.completeOAuthCallback(url: URL(string: "https://app.example.com/callback#\(withoutFragment)")!)
+    XCTAssertNil(withoutResult.continueTo)
   }
 
   func testCompleteOAuthCallbackReadsFragmentAndMovesToAuthenticated() async throws {
@@ -304,6 +401,68 @@ final class AppIdentityContractTests: XCTestCase {
     unsubscribe()
     await identity.signOut()
     XCTAssertEqual(seen.values, [.anonymous, .pending, .authenticated], "no further calls after unsubscribe")
+  }
+
+  // MARK: Native id_token sign-in
+
+  func testSignInWithIdTokenPostsContractShapeAndMovesToAuthenticated() async throws {
+    let fixture = Contract.route("oauthIdToken")
+    let success = fixture["success"] as! [String: Any]
+    let body = success["body"] as! [String: Any]
+    let request = fixture["requestBody"] as! [String: Any]
+    nonisolated(unsafe) var seenURL: String?
+    nonisolated(unsafe) var seenBody: [String: Any]?
+    MockURLProtocol.handler = { req in
+      seenURL = req.url?.absoluteString
+      seenBody = try? JSONSerialization.jsonObject(with: req.bodyData()) as? [String: Any]
+      return (success["status"] as! Int, jsonData(body))
+    }
+    let identity = makeIdentity()
+    let user = try await identity.signInWithIdToken(
+      provider: "apple",
+      idToken: request["id_token"] as! String,
+      nonce: request["nonce"] as? String
+    )
+    XCTAssertEqual(identity.state, .authenticated)
+    XCTAssertEqual(user.email, (body["user"] as! [String: Any])["email"] as? String)
+    XCTAssertEqual(identity.session?.sessionToken, body["session_token"] as? String)
+    XCTAssertEqual(seenURL, "\(BASE)\(fixture["path"] as! String)")
+    XCTAssertEqual(seenBody?["id_token"] as? String, request["id_token"] as? String)
+    XCTAssertEqual(seenBody?["nonce"] as? String, request["nonce"] as? String)
+    XCTAssertEqual(seenBody?["namespace"] as? String, "default")
+  }
+
+  func testSignInWithIdTokenOmitsNonceWhenNoneGiven() async throws {
+    let fixture = Contract.route("oauthIdToken")
+    let success = fixture["success"] as! [String: Any]
+    nonisolated(unsafe) var seenBody: [String: Any]?
+    nonisolated(unsafe) var seenURL: String?
+    MockURLProtocol.handler = { req in
+      seenURL = req.url?.absoluteString
+      seenBody = try? JSONSerialization.jsonObject(with: req.bodyData()) as? [String: Any]
+      return (success["status"] as! Int, jsonData(success["body"] as! [String: Any]))
+    }
+    let identity = makeIdentity()
+    _ = try await identity.signInWithIdToken(provider: "google", idToken: "g.i.t")
+    XCTAssertEqual(seenURL, "\(BASE)/auth/oauth/google/id-token")
+    XCTAssertNil(seenBody?["nonce"])
+  }
+
+  func testSignInWithIdTokenMapsRejectionToOauthFailedAndUnconfiguredToNotConfigured() async throws {
+    let fixture = Contract.route("oauthIdToken")
+    let errors = fixture["errors"] as! [[String: Any]]
+    for expected in errors where (expected["status"] as! Int) != 429 {
+      let status = expected["status"] as! Int
+      MockURLProtocol.handler = { _ in (status, jsonData(expected["body"] as! [String: Any])) }
+      let identity = makeIdentity()
+      do {
+        _ = try await identity.signInWithIdToken(provider: "apple", idToken: "bad")
+        XCTFail("expected an error for status \(status)")
+      } catch let error as ShovelbaseIdentityError {
+        XCTAssertEqual(error.code.rawValue, expected["code"] as! String)
+      }
+      XCTAssertEqual(identity.state, .anonymous)
+    }
   }
 
   func testSessionsAreNamespacedSoTwoNamespacesNeverCollideInSharedStorage() async throws {

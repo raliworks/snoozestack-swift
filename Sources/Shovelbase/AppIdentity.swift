@@ -7,9 +7,10 @@
 // provider redirect) is safe with no local state.
 //
 // A separate, project-scoped end-user population from `.auth` (GoTrue) —
-// not an extension of it. There is deliberately no signUp,
-// signInWithPassword, resetPasswordForEmail, confirm, or invite anywhere in
-// this file.
+// not an extension of it. Email/password arrived with R3 (#230) and native
+// id_token sign-in after it; what this file still deliberately lacks is
+// resetPasswordForEmail, confirm and invite — a forgotten password is
+// recovered with a magic link, then changePassword.
 //
 // A lock-guarded class rather than an actor — matches ShovelbasePush.swift's
 // own shape (NSLock-guarded mutable state) so state (`.state`/`.session`/
@@ -44,6 +45,7 @@ public enum IdentityState: Sendable, Equatable {
 
 public enum ShovelbaseIdentityErrorCode: String, Sendable {
   case invalidRedirect = "invalid_redirect"
+  case invalidContinuation = "invalid_continuation"
   case rateLimited = "rate_limited"
   case invalidOrExpiredLink = "invalid_or_expired_link"
   case invalidOrExpiredSession = "invalid_or_expired_session"
@@ -53,6 +55,11 @@ public enum ShovelbaseIdentityErrorCode: String, Sendable {
   case networkError = "network_error"
   case notConfigured = "not_configured"
   case serverError = "server_error"
+  // Email/password (R5, #232): a failed sign-in is invalidCredentials
+  // (uniform for unknown email / wrong password / passwordless accounts);
+  // a rejected new password is passwordTooWeak.
+  case invalidCredentials = "invalid_credentials"
+  case passwordTooWeak = "password_too_weak"
 }
 
 /// Every throw from ``ShovelbaseIdentity`` is one of these. See
@@ -102,11 +109,18 @@ public struct MagicLinkResult: Sendable {
   public let user: IdentityUser
   public let isNewUser: Bool
   public let redirectTo: String?
+  /// Redirect-safe sign-in continuation (#174): whatever `requestMagicLink`
+  /// was called with, or nil. The caller navigates there on success; this
+  /// method never does so itself.
+  public let continueTo: String?
 }
 
 public struct OAuthResult: Sendable {
   public let user: IdentityUser
   public let isNewUser: Bool
+  /// Redirect-safe sign-in continuation (#174): whatever `startOAuth` was
+  /// called with, or nil.
+  public let continueTo: String?
 }
 
 // MARK: - Storage
@@ -255,8 +269,15 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
 
   /// Requests a magic-link email. Resolves once `redirectTo` checks out —
   /// never reveals whether `email` has an account.
-  public func requestMagicLink(email: String, redirectTo: String) async throws {
-    let _: OkBody = try await post("/magic-link", body: ["email": email, "redirect_to": redirectTo, "namespace": namespace])
+  ///
+  /// `continueTo` (#174) is the redirect-safe sign-in continuation target:
+  /// the specific shared resource the visitor was trying to reach, checked
+  /// by origin against `[auth] redirect_urls` and returned from
+  /// `completeMagicLink(token:)` on success.
+  public func requestMagicLink(email: String, redirectTo: String, continueTo: String? = nil) async throws {
+    var body: [String: Any] = ["email": email, "redirect_to": redirectTo, "namespace": namespace]
+    if let continueTo { body["continue_to"] = continueTo }
+    let _: OkBody = try await post("/magic-link", body: body)
     setState(.pending)
   }
 
@@ -291,11 +312,136 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
         ),
         user: user
       )
-      return MagicLinkResult(user: user, isNewUser: payload.isNewUser, redirectTo: payload.redirectTo)
+      return MagicLinkResult(user: user, isNewUser: payload.isNewUser, redirectTo: payload.redirectTo, continueTo: payload.continueTo)
     } catch {
       setState(.anonymous)
       throw error
     }
+  }
+
+  // MARK: Email/password (R5, #232)
+
+  /// Email/password sign-up. Always resolves once `redirectTo` checks out —
+  /// the chosen password activates only when the verification email's link
+  /// is clicked (which also signs the user in via
+  /// `completeMagicLink(token:)` on the landing page), so this never
+  /// reveals whether `email` has an account.
+  @discardableResult
+  public func signUpWithPassword(email: String, password: String, redirectTo: String, continueTo: String? = nil) async throws -> Bool {
+    var body: [String: Any] = ["email": email, "password": password, "redirect_to": redirectTo, "namespace": namespace]
+    if let continueTo { body["continue_to"] = continueTo }
+    do {
+      let payload: PasswordSignUpBody = try await post("/password/sign-up", body: body)
+      setState(.pending)
+      return payload.verificationRequired
+    } catch {
+      throw Self.rewritePasswordError(error)
+    }
+  }
+
+  /// Email/password sign-in. Throws `.invalidCredentials` for unknown
+  /// email / wrong password / passwordless accounts alike (the server keeps
+  /// them indistinguishable), or `.rateLimited` while a lockout backoff or
+  /// the route's IP budget is in effect.
+  @discardableResult
+  public func signInWithPassword(email: String, password: String) async throws -> IdentityUser {
+    setState(.pending)
+    do {
+      let payload: MagicLinkVerifyPayload = try await post("/password/sign-in", body: ["email": email, "password": password, "namespace": namespace])
+      let user = IdentityUser(id: payload.user.id, email: payload.user.email)
+      applySession(
+        IdentitySession(
+          sessionToken: payload.sessionToken, refreshToken: payload.refreshToken,
+          sessionExpiresAt: payload.sessionExpiresAt, refreshExpiresAt: payload.refreshExpiresAt
+        ),
+        user: user
+      )
+      return user
+    } catch {
+      setState(.anonymous)
+      throw Self.rewritePasswordError(error)
+    }
+  }
+
+  /// Changes (or first-sets) the signed-in user's password. A user who
+  /// already has one must present it as `currentPassword`; a
+  /// magic-link/OAuth-only user omits it — the live session is the proof.
+  /// There is no reset method by design: reset IS the magic link, then this.
+  public func changePassword(currentPassword: String? = nil, newPassword: String) async throws {
+    guard let token = withLock({ _session?.sessionToken }) else {
+      throw ShovelbaseIdentityError(code: .notConfigured, message: "No session — sign in before changing the password")
+    }
+    var body: [String: Any] = ["new_password": newPassword, "namespace": namespace]
+    if let currentPassword { body["current_password"] = currentPassword }
+    do {
+      let _: OkBody = try await post("/password/change", body: body, headers: ["Authorization": "Bearer \(token)"])
+    } catch {
+      throw Self.rewritePasswordError(error)
+    }
+  }
+
+  // The password routes reuse statuses whose generic mapping means
+  // something else (401 -> invalidOrExpiredSession), so their errors are
+  // re-labeled here at the call site, mirroring the JS SDK exactly.
+  private static func rewritePasswordError(_ error: Error) -> Error {
+    guard let e = error as? ShovelbaseIdentityError else { return error }
+    if e.status == 401, e.message.lowercased().contains("authentication required") { return e }
+    if e.status == 401 { return ShovelbaseIdentityError(code: .invalidCredentials, status: e.status, message: e.message) }
+    if e.status == 400, e.message.lowercased().contains("password") {
+      return ShovelbaseIdentityError(code: .passwordTooWeak, status: e.status, message: e.message)
+    }
+    return e
+  }
+
+  /// Native id_token sign-in — the third way into a session, beside magic
+  /// link and `startOAuth`. Google's iOS SDK and `ASAuthorizationController`
+  /// both hand the app a provider-signed id_token directly, with no browser
+  /// redirect and no authorization code, so there is nothing for
+  /// `completeOAuthCallback(url:)` to read.
+  ///
+  /// The token must be minted for one of the project's declared audiences:
+  /// the provider's `client_id`, or one of its `native_client_ids` — the iOS
+  /// OAuth client id for google, the app's bundle id for apple.
+  ///
+  /// `nonce` is the RAW nonce the app generated, not its SHA-256: Apple puts
+  /// the hash in the token and the server compares the two. Pass it whenever
+  /// the `ASAuthorizationAppleIDRequest` carried one; omitting it skips the
+  /// replay check.
+  ///
+  /// Throws `.oauthFailed` when the token does not verify, and
+  /// `.notConfigured` when the project has no such provider.
+  @discardableResult
+  public func signInWithIdToken(provider: String, idToken: String, nonce: String? = nil) async throws -> IdentityUser {
+    setState(.pending)
+    var body: [String: Any] = ["id_token": idToken, "namespace": namespace]
+    if let nonce { body["nonce"] = nonce }
+    let escaped = provider.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? provider
+    do {
+      let payload: MagicLinkVerifyPayload = try await post("/oauth/\(escaped)/id-token", body: body)
+      let user = IdentityUser(id: payload.user.id, email: payload.user.email)
+      applySession(
+        IdentitySession(
+          sessionToken: payload.sessionToken, refreshToken: payload.refreshToken,
+          sessionExpiresAt: payload.sessionExpiresAt, refreshExpiresAt: payload.refreshExpiresAt
+        ),
+        user: user
+      )
+      return user
+    } catch {
+      setState(.anonymous)
+      throw Self.rewriteIdTokenError(error)
+    }
+  }
+
+  // The native id-token route's failures mean something different from the
+  // generic status mapping: its 401 is a token that did not verify (not a
+  // dead session), and its 404 is "no such provider configured for this
+  // project" (not an expired link). Mirrors the JS SDK exactly.
+  private static func rewriteIdTokenError(_ error: Error) -> Error {
+    guard let e = error as? ShovelbaseIdentityError else { return error }
+    if e.status == 401 { return ShovelbaseIdentityError(code: .oauthFailed, status: e.status, message: e.message) }
+    if e.status == 404 { return ShovelbaseIdentityError(code: .notConfigured, status: e.status, message: e.message) }
+    return e
   }
 
   // MARK: OAuth
@@ -304,13 +450,17 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   /// travel as query params — this route is a plain browser/webview
   /// navigation, not a fetch). Open it with `ASWebAuthenticationSession` or
   /// `UIApplication.open(_:)`; the provider redirects back to `redirectTo`.
-  public func startOAuth(provider: String, redirectTo: String) -> URL {
+  /// `continueTo` (#174): the same redirect-safe sign-in continuation target
+  /// `requestMagicLink(email:redirectTo:continueTo:)` accepts.
+  public func startOAuth(provider: String, redirectTo: String, continueTo: String? = nil) -> URL {
     var components = URLComponents(url: endpoint.appendingPathComponent("oauth/\(provider)/start"), resolvingAgainstBaseURL: false)!
-    components.queryItems = [
+    var queryItems = [
       URLQueryItem(name: "apikey", value: apiKey),
       URLQueryItem(name: "redirect_to", value: redirectTo),
-      URLQueryItem(name: "namespace", value: namespace),
     ]
+    if let continueTo { queryItems.append(URLQueryItem(name: "continue_to", value: continueTo)) }
+    queryItems.append(URLQueryItem(name: "namespace", value: namespace))
+    components.queryItems = queryItems
     setState(.pending)
     guard let url = components.url else {
       preconditionFailure("ShovelbaseIdentity.startOAuth produced an invalid URL")
@@ -358,7 +508,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
         IdentitySession(sessionToken: sessionToken, refreshToken: refreshToken, sessionExpiresAt: sessionExpiresAt, refreshExpiresAt: refreshExpiresAt),
         user: user
       )
-      return OAuthResult(user: user, isNewUser: params["is_new_user"] == "true")
+      return OAuthResult(user: user, isNewUser: params["is_new_user"] == "true", continueTo: params["continue_to"])
     } catch {
       setState(.anonymous)
       throw error
@@ -480,11 +630,12 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
     }
   }
 
-  private func post<Response: Decodable>(_ path: String, body: [String: Any]) async throws -> Response {
+  private func post<Response: Decodable>(_ path: String, body: [String: Any], headers: [String: String] = [:]) async throws -> Response {
     var request = URLRequest(url: URL(string: endpoint.absoluteString + path)!)
     request.httpMethod = "POST"
     request.setValue(apiKey, forHTTPHeaderField: "apikey")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
     request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
     let data: Data
@@ -514,6 +665,12 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
       return ShovelbaseIdentityError(code: .invalidOrExpiredLink, status: status, message: message)
     case 401:
       return ShovelbaseIdentityError(code: .invalidOrExpiredSession, status: status, message: message)
+    // Checked before invalidRedirect below: a rejected continue_to's message
+    // names redirect_urls too (same allowlist, checked by origin instead of
+    // exact match) — see isAllowedContinuation's own comment in
+    // portal/src/lib/app-identity.ts.
+    case 400 where message.lowercased().contains("continuation"):
+      return ShovelbaseIdentityError(code: .invalidContinuation, status: status, message: message)
     case 400 where message.lowercased().contains("redirect"):
       return ShovelbaseIdentityError(code: .invalidRedirect, status: status, message: message)
     default:
@@ -563,6 +720,14 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
 // MARK: - Wire shapes (see ../../../docs/app-identity-client-contract.md)
 
 private struct OkBody: Decodable { let ok: Bool }
+private struct PasswordSignUpBody: Decodable {
+  let ok: Bool
+  let verificationRequired: Bool
+  enum CodingKeys: String, CodingKey {
+    case ok
+    case verificationRequired = "verification_required"
+  }
+}
 private struct ErrorBody: Decodable { let error: String }
 
 private struct UserPayload: Decodable {
@@ -591,6 +756,7 @@ private struct MagicLinkVerifyPayload: Decodable {
   let user: UserPayload
   let isNewUser: Bool
   let redirectTo: String?
+  let continueTo: String?
   let sessionToken: String
   let refreshToken: String
   let sessionExpiresAt: String
@@ -600,6 +766,7 @@ private struct MagicLinkVerifyPayload: Decodable {
     case ok, user
     case isNewUser = "is_new_user"
     case redirectTo = "redirect_to"
+    case continueTo = "continue_to"
     case sessionToken = "session_token"
     case refreshToken = "refresh_token"
     case sessionExpiresAt = "session_expires_at"
