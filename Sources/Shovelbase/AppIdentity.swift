@@ -410,8 +410,14 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   ///
   /// Throws `.oauthFailed` when the token does not verify, and
   /// `.notConfigured` when the project has no such provider.
+  ///
+  /// Returns `isNewUser` alongside the user, as the JS SDK's
+  /// `signInWithIdToken` does and as the route's `is_new_user` field carries:
+  /// an app that greets a first sign-in differently from a returning one has
+  /// no other way to tell, since a native sign-in has no separate sign-up.
+  /// `continueTo` is always nil here — there is no redirect to continue.
   @discardableResult
-  public func signInWithIdToken(provider: String, idToken: String, nonce: String? = nil) async throws -> IdentityUser {
+  public func signInWithIdToken(provider: String, idToken: String, nonce: String? = nil) async throws -> OAuthResult {
     setState(.pending)
     var body: [String: Any] = ["id_token": idToken, "namespace": namespace]
     if let nonce { body["nonce"] = nonce }
@@ -426,7 +432,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
         ),
         user: user
       )
-      return user
+      return OAuthResult(user: user, isNewUser: payload.isNewUser, continueTo: nil)
     } catch {
       setState(.anonymous)
       throw Self.rewriteIdTokenError(error)

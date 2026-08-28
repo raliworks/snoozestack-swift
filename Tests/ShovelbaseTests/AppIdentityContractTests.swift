@@ -418,13 +418,18 @@ final class AppIdentityContractTests: XCTestCase {
       return (success["status"] as! Int, jsonData(body))
     }
     let identity = makeIdentity()
-    let user = try await identity.signInWithIdToken(
+    let result = try await identity.signInWithIdToken(
       provider: "apple",
       idToken: request["id_token"] as! String,
       nonce: request["nonce"] as? String
     )
     XCTAssertEqual(identity.state, .authenticated)
-    XCTAssertEqual(user.email, (body["user"] as! [String: Any])["email"] as? String)
+    XCTAssertEqual(result.user.email, (body["user"] as! [String: Any])["email"] as? String)
+    // is_new_user rides back with the session, as it does for magic link and
+    // the redirect callback — a native sign-in has no separate sign-up, so
+    // this is the only thing that distinguishes a first one.
+    XCTAssertEqual(result.isNewUser, body["is_new_user"] as? Bool)
+    XCTAssertNil(result.continueTo)
     XCTAssertEqual(identity.session?.sessionToken, body["session_token"] as? String)
     XCTAssertEqual(seenURL, "\(BASE)\(fixture["path"] as! String)")
     XCTAssertEqual(seenBody?["id_token"] as? String, request["id_token"] as? String)
