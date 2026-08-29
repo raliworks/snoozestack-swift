@@ -1,23 +1,28 @@
 # shovelbase-swift
 
 Swift client for [shovelbase](../README.md) projects on iOS, macOS, tvOS, and
-watchOS — auth, storage, edge functions, and signals. No client-side database
-query builder (`.from()`/`.schema()`/`.rpc()` were removed with PostgREST —
-see `../docs/migrations/postgrest-removal.md`): read or write the database
-from a committed function instead, over its own `SHOVELBASE_DB_URL`. Calling
-any of the three is a compile error pointing at that guide — `ShovelbaseClient`
-wraps the upstream client rather than aliasing it specifically so they aren't
-on its type surface (see `Shovelbase.swift`'s header comment).
+watchOS — application identity, functions, signals and push.
 
-The `Shovelbase` module is a full typed client for your shovelbase project —
-auth, storage, and edge functions — plus Mixpanel-style signals. Two library
-products:
+As of 1.0 the package has no third-party dependencies (#209). It used to wrap
+the upstream supabase client, which is why three surfaces you may remember
+are gone:
 
-- **`Shovelbase`** — the full client (`Shovelbase.createClient`, database,
-  auth, storage, functions, and `.signals`).
-- **`ShovelbaseSignals`** — event tracking only; a single dependency-free file,
-  if you don't need the database/auth client. (`ShovelbaseAnalytics` remains as
-  a deprecated alias product.)
+| Removed | Replacement |
+|---|---|
+| `.auth` | `.identity` — application identity, below |
+| `.storage` | a function that returns a signed URL; PUT to it directly. For a public bucket, build the object URL: `<SHOVELBASE_URL>/storage/v1/object/public/<bucket>/<path>` |
+| `.from()` / `.schema()` / `.rpc()` | removed with PostgREST (`../docs/migrations/postgrest-removal.md`) — read or write the database from a committed function, over its own `SHOVELBASE_DB_URL` |
+
+`.base` (the wrapped upstream client) is gone with them. SPM consumers pin
+versions, so nothing already shipped changes under you.
+
+Library products:
+
+- **`Shovelbase`** — the full client (`Shovelbase.createClient`, `.identity`,
+  `.functions`, `.signals`, `.push`).
+- **`ShovelbaseSignals`** — event tracking only; a single file, if you don't
+  need the rest. (`ShovelbaseAnalytics` remains as a deprecated alias product.)
+- **`ShovelbasePush`** — push notification registration only.
 
 ## Install
 
@@ -63,35 +68,28 @@ let shovelbase = Shovelbase.createClient(
     key: "<SHOVELBASE_ANON_KEY>"
 )
 
-// Auth
-try await shovelbase.auth.signUp(email: email, password: password)
-let user = try await shovelbase.auth.session.user
+// Application identity
+let user = try await shovelbase.identity.signInWithPassword(email: email, password: password)
 
-// Storage
-try await shovelbase.storage.from("avatars")
-    .upload("\(user.id).png", data: imageData)
-
-// Edge functions
+// Functions — POST by default, and the signed-in session is attached for you
 let reply: ChatReply = try await shovelbase.functions
-    .invoke("kyd-golf-chat", options: .init(body: ["messages": messages]))
+    .invoke("kyd-golf-chat", body: ["messages": messages])
 
 // Signals (event tracking; charted on the portal's Signals page)
-shovelbase.signals.identify(user.id.uuidString)  // merges their anonymous history in
+shovelbase.signals.identify(user.id)  // merges their anonymous history in
 shovelbase.signals.track("signup", properties: ["plan": "pro"])
 shovelbase.signals.reset()                        // on sign-out
 ```
 
-Supporting types (`Session`, `User`, query/error types, …) come from the same
-`import Shovelbase`. Not supported yet: realtime subscriptions (`.channel()`).
-Removed for good: `.from()`/`.schema()`/`.rpc()` (PostgREST) — calling one is
-a compile error with a pointer to the replacement pattern.
+Supporting types come from the same `import Shovelbase`. Not supported:
+realtime subscriptions.
 
-### Application identity (magic link, OAuth, sessions)
+### Application identity (magic link, password, OAuth, sessions)
 
-`.identity` is a separate, project-scoped end-user population from `.auth`
-(GoTrue) — sign-in for your own hosted application's users, not shovelbase
-operators. See `../docs/app-identity-client-contract.md` for the full state
-machine and error taxonomy (shared with the JS SDK).
+`.identity` is sign-in for your own hosted application's users — this
+project's own end-user population, not shovelbase operators. See
+`../docs/app-identity-client-contract.md` for the full state machine and
+error taxonomy (shared with the JS SDK).
 
 ```swift
 try await shovelbase.identity.requestMagicLink(
@@ -117,37 +115,33 @@ universal-link handler passes the resulting `redirectTo` URL to
 `shovelbase.identity.onStateChange { state, session, user in ... }` observes
 `.anonymous` / `.pending` / `.authenticated` / `.expired` reactively.
 
-### Sign in with Apple, and Hide My Email
+### Sign in with Apple
 
 Native apps sign in by ID token — pass the credential from
 `ASAuthorizationController` straight through, and the user never leaves the
-app. Use `signInWithIdTokenResolvingPrivateRelay` rather than
-`signInWithIdToken`:
+app:
 
 ```swift
-let session = try await shovelbase.auth.signInWithIdTokenResolvingPrivateRelay(
-    credentials: .init(provider: .apple, idToken: idToken, nonce: nonce)
+let result = try await shovelbase.identity.signInWithIdToken(
+    provider: "apple", idToken: idToken, nonce: nonce
 )
-session.user.email   // "…@privaterelay.appleid.com", not nil
+result.user.email
+result.isNewUser   // a native sign-in has no separate sign-up
 ```
 
-Apple hands the relay address to your app in the *identity token* on every
-sign-in, but drops it from the credential object after the first
-authorization — so a user whose record was created without it comes back from
-plain `signInWithIdToken` with `user.email == nil`, on that sign-in and on
-every one after it. The `ResolvingPrivateRelay` variant is the same call, plus:
-it reads the token's `email` claim when the session comes back without one,
-and remembers the address on the device so `auth.session` and
-`auth.currentUser` still report it after a token refresh or a relaunch (it is
-dropped on `signOut()`). Everything else is untouched.
+Hide My Email is handled server-side: Apple puts the relay address in the
+identity token's `email` claim on every sign-in, and the auth server reads it
+from there when creating or updating the record — so `result.user.email` is
+the `…@privaterelay.appleid.com` address rather than nil, on the first
+sign-in and every one after.
 
-The tokens themselves are unchanged — they're issued from the record the auth
-server holds, so anything reading the email server-side (RLS policies, edge
-functions) sees what the server stored, not the resolved address. Store it on
-your own profile row if the backend needs it.
+(Before 1.0 this needed a client-side workaround,
+`signInWithIdTokenResolvingPrivateRelay`, because the upstream auth client
+only saw what the credential object carried — which Apple drops after the
+first authorization. That surface is gone with `.auth`.)
 
-`Shovelbase.emailClaim(fromIdToken:)` exposes the claim read on its own, for
-apps that want the address before exchanging the token.
+The project must have the provider's native client id registered, or the
+call is rejected — see `../docs/app-identity-client-contract.md`.
 
 ### Signals behavior
 

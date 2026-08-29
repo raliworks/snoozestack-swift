@@ -3,9 +3,8 @@ import PackageDescription
 
 let package = Package(
     name: "shovelbase-swift",
-    // Platform floors follow the upstream client 2.x (the Shovelbase target's
-    // dependency); ShovelbaseSignals and ShovelbasePush themselves have no
-    // third-party dependencies.
+    // No third-party dependencies in any target as of 1.0 (#209); the floors
+    // below are what the SDK's own async/Sendable use needs.
     platforms: [
         .iOS(.v16),
         .macOS(.v13),
@@ -13,8 +12,7 @@ let package = Package(
         .watchOS(.v9),
     ],
     products: [
-        // Full client: database, auth, storage, edge functions (upstream client
-        // API surface re-exported) + signals + push.
+        // Full client: application identity + functions + signals + push.
         .library(name: "Shovelbase", targets: ["Shovelbase"]),
         // Signals (event tracking) only — no third-party dependencies.
         .library(name: "ShovelbaseSignals", targets: ["ShovelbaseSignals"]),
@@ -23,14 +21,11 @@ let package = Package(
         // Push notification registration only — no third-party dependencies.
         .library(name: "ShovelbasePush", targets: ["ShovelbasePush"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/supabase/supabase-swift.git", from: "2.0.0"),
-    ],
+    dependencies: [],
     targets: [
         .target(
             name: "Shovelbase",
             dependencies: [
-                .product(name: "Supabase", package: "supabase-swift"),
                 "ShovelbaseSignals",
                 "ShovelbasePush",
             ],
@@ -45,11 +40,8 @@ let package = Package(
             path: "Sources/ShovelbaseAnalytics"
         ),
         .target(name: "ShovelbasePush", path: "Sources/ShovelbasePush"),
-        // Smoke tests: the wrapper forwards the upstream client correctly, and
-        // .from()/.schema()/.rpc() genuinely fail to compile with an actionable
-        // message (see ShovelbaseClientTests.swift for how the latter is proven
-        // — it shells out to swiftc, since a compile failure can't be asserted
-        // on from inside the same compilation).
+        // Smoke tests for the client's own wiring, plus the application
+        // identity contract shared with shovelbase-js.
         .testTarget(
             name: "ShovelbaseTests",
             dependencies: ["Shovelbase"],

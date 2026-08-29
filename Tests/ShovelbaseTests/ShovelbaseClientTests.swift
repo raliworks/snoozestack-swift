@@ -1,119 +1,175 @@
-// Smoke tests for #151 (post-#123 parity with shovelbase-js's
-// disableQueryBuilder()): ShovelbaseClient wraps the upstream SupabaseClient
-// instead of aliasing it (see Shovelbase.swift's header comment for why),
-// specifically so `.from()`/`.schema()`/`.rpc()` are not on its type surface
-// — calling one is a compile error carrying a message that points at
-// docs/migrations/postgrest-removal.md.
+// The client's own wiring, and the wire contract of functions.invoke().
+//
+// This file used to prove that `.from()`/`.schema()`/`.rpc()` were compile
+// errors on ShovelbaseClient — a guard that mattered while the type wrapped
+// the upstream client and could re-inherit those names on a dependency bump
+// (#151). 1.0 dropped the dependency (#209), so there is nothing left to
+// inherit from and nothing to guard against; what is worth pinning now is
+// that a function call still puts the same bytes on the wire that
+// shovelbase-js does.
 //
 // No workflow builds sdk-swift on a PR (.github/workflows/sdk-swift.yml only
-// publishes, on push to master, and has never run `swift build`/`swift test`
-// — see its own header comment) — `swift test` from sdk-swift/ is the bar.
+// publishes, on push to master) — `swift test` from sdk-swift/ is the bar.
 import Foundation
-import Supabase
 import XCTest
 @testable import Shovelbase
 
-/// A compile failure can't be asserted on from inside the same compilation
-/// unit, so this shells out to `swiftc -typecheck` against a throwaway
-/// fixture that calls all three removed methods, and checks both that it
-/// fails *and* that the diagnostic is the actionable one this issue asked
-/// for — not a generic "no such member" (which is what a caller would get if
-/// the `@available(*, unavailable, message:)` overloads in Shovelbase.swift
-/// were ever accidentally dropped instead of just renamed on an upstream
-/// bump).
-final class RemovedQueryBuilderCompileFailureTests: XCTestCase {
-    func testFromSchemaRpcFailToCompileWithActionableMessage() throws {
-        let packageRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // .../Tests/ShovelbaseTests
-            .deletingLastPathComponent() // .../Tests
-            .deletingLastPathComponent() // package root (sdk-swift/)
+/// Captures the request a call makes and answers with a canned response,
+/// without a network.
+final class StubProtocol: URLProtocol {
+    nonisolated(unsafe) static var lastRequest: URLRequest?
+    nonisolated(unsafe) static var lastBody: Data?
+    nonisolated(unsafe) static var status = 200
+    nonisolated(unsafe) static var responseBody = Data(#"{"ok":true}"#.utf8)
 
-        let (binPathStatus, binPathOutput) = try shell(
-            "swift", ["build", "--show-bin-path"], currentDirectory: packageRoot
-        )
-        try XCTSkipUnless(
-            binPathStatus == 0,
-            "couldn't resolve the package's build directory: \(binPathOutput)"
-        )
-        let modulesPath = binPathOutput.trimmingCharacters(in: .whitespacesAndNewlines) + "/Modules"
+    static func reset() {
+        lastRequest = nil
+        lastBody = nil
+        status = 200
+        responseBody = Data(#"{"ok":true}"#.utf8)
+    }
 
-        let fixture = """
-        import Shovelbase
-        func f(_ shovelbase: ShovelbaseClient) {
-            _ = shovelbase.from("table")
-            _ = shovelbase.schema("public")
-            _ = shovelbase.rpc("fn")
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lastRequest = request
+        // URLProtocol strips httpBody into a stream; read it back so the test
+        // can assert on what was actually sent.
+        Self.lastBody = request.httpBody ?? request.httpBodyStream.map { stream in
+            stream.open()
+            defer { stream.close() }
+            var data = Data()
+            let size = 4096
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
+            defer { buffer.deallocate() }
+            while stream.hasBytesAvailable {
+                let read = stream.read(buffer, maxLength: size)
+                if read <= 0 { break }
+                data.append(buffer, count: read)
+            }
+            return data
         }
-        """
-        let fixtureURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("shovelbase-removed-query-builder-\(UUID().uuidString).swift")
-        try fixture.write(to: fixtureURL, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: Self.status,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Self.responseBody)
+        client?.urlProtocolDidFinishLoading(self)
+    }
 
-        let (status, output) = try shell("swiftc", ["-typecheck", fixtureURL.path, "-I", modulesPath])
+    override func stopLoading() {}
+}
 
-        XCTAssertNotEqual(status, 0, "shovelbase.from/schema/rpc must fail to compile, but swiftc succeeded")
-        // rpc's diagnostic names the overload ('rpc(_:count:)'), so match
-        // loosely on the method name rather than an exact quoted identifier.
-        for method in ["from", "schema", "rpc"] {
-            XCTAssertTrue(
-                output.contains("'\(method)") && output.contains("is unavailable"),
-                "expected an 'unavailable' diagnostic for \(method); got:\n\(output)"
-            )
-        }
-        XCTAssertTrue(
-            output.contains("docs/migrations/postgrest-removal.md"),
-            "diagnostic should point at the migration guide; got:\n\(output)"
+private struct OKResponse: Decodable { let ok: Bool }
+
+final class ShovelbaseClientTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        StubProtocol.reset()
+        URLProtocol.registerClass(StubProtocol.self)
+    }
+
+    override func tearDown() {
+        URLProtocol.unregisterClass(StubProtocol.self)
+        super.tearDown()
+    }
+
+    private func makeClient() -> ShovelbaseClient {
+        Shovelbase.createClient(
+            url: "https://demo.shovelbase.com",
+            key: "test-anon-key",
+            // An in-memory store keeps the test off the real keychain.
+            identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
         )
-        XCTAssertTrue(
-            output.contains("shovelbase.functions.invoke"),
-            "diagnostic should name the replacement pattern; got:\n\(output)"
+    }
+
+    func testCreateClientExposesTheNativeSurface() {
+        let client = makeClient()
+        XCTAssertEqual(client.url, "https://demo.shovelbase.com")
+        XCTAssertEqual(client.identity.state, .anonymous)
+        // Trailing slashes are trimmed so every service path appends cleanly.
+        let trailing = Shovelbase.createClient(
+            url: "https://demo.shovelbase.com/",
+            key: "k",
+            identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
+        )
+        XCTAssertEqual(trailing.url, "https://demo.shovelbase.com")
+    }
+
+    func testInvokePostsToFunctionsV1WithTheApiKey() async throws {
+        let client = makeClient()
+        let _: OKResponse = try await client.functions.invoke("wallets")
+
+        let request = try XCTUnwrap(StubProtocol.lastRequest)
+        XCTAssertEqual(request.url?.absoluteString, "https://demo.shovelbase.com/functions/v1/wallets")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "apikey"), "test-anon-key")
+        // No session yet, so the api key is the bearer — same default as
+        // shovelbase-js.
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-anon-key")
+    }
+
+    func testInvokeHonoursAnExplicitMethodAndEncodesAJSONBody() async throws {
+        let client = makeClient()
+        struct Charge: Encodable { let amount: Int }
+        let _: OKResponse = try await client.functions.invoke(
+            "charge", method: .patch, body: Charge(amount: 250)
+        )
+
+        let request = try XCTUnwrap(StubProtocol.lastRequest)
+        XCTAssertEqual(request.httpMethod, "PATCH")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        let body = try XCTUnwrap(StubProtocol.lastBody)
+        XCTAssertEqual(String(data: body, encoding: .utf8), #"{"amount":250}"#)
+    }
+
+    func testInvokeDoesNotOverrideACallerSuppliedAuthorization() async throws {
+        let client = makeClient()
+        let _: OKResponse = try await client.functions.invoke(
+            "wallets", headers: ["Authorization": "Bearer explicit-token"]
+        )
+        let request = try XCTUnwrap(StubProtocol.lastRequest)
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer explicit-token")
+    }
+
+    func testInvokeSurfacesTheFunctionsOwnErrorMessage() async throws {
+        StubProtocol.status = 402
+        StubProtocol.responseBody = Data(#"{"error":"insufficient funds"}"#.utf8)
+        let client = makeClient()
+
+        do {
+            let _: OKResponse = try await client.functions.invoke("charge")
+            XCTFail("expected the call to throw")
+        } catch let error as ShovelbaseFunctionsError {
+            guard case let .http(status, message) = error else {
+                return XCTFail("expected an http error, got \(error)")
+            }
+            XCTAssertEqual(status, 402)
+            XCTAssertEqual(message, "insufficient funds")
+        }
+    }
+
+    func testInvokeAppendsQueryItems() async throws {
+        let client = makeClient()
+        let _: OKResponse = try await client.functions.invoke(
+            "wallets", method: .get, query: [URLQueryItem(name: "limit", value: "10")]
+        )
+        let request = try XCTUnwrap(StubProtocol.lastRequest)
+        XCTAssertEqual(
+            request.url?.absoluteString,
+            "https://demo.shovelbase.com/functions/v1/wallets?limit=10"
         )
     }
 }
 
-/// The real regression risk in wrapping `SupabaseClient` instead of aliasing
-/// it (as `ShovelbaseClient` did pre-#151) is a forwarding property wired up
-/// wrong. No network calls here — constructing the client and reading each
-/// forwarded property is enough to prove they resolve to the upstream
-/// sub-clients instead of trapping.
-final class ShovelbaseClientWrapperTests: XCTestCase {
-    func testCreateClientForwardsUpstreamSurface() throws {
-        let shovelbase = Shovelbase.createClient(
-            url: "https://example.shovelbase.com",
-            key: "test-anon-key"
-        )
-
-        _ = shovelbase.auth
-        _ = shovelbase.storage
-        _ = shovelbase.functions
-        _ = shovelbase.realtimeV2
-        _ = shovelbase.channels
-        _ = shovelbase.headers
-        _ = shovelbase.signals
-        _ = shovelbase.push
-        // .base is the escape hatch to the wrapped upstream client (see
-        // Shovelbase.swift) — prove createClient() actually populated it.
-        XCTAssertEqual(shovelbase.base.headers["Apikey"], "test-anon-key")
-    }
-}
-
-private func shell(
-    _ command: String,
-    _ arguments: [String],
-    currentDirectory: URL? = nil
-) throws -> (status: Int32, output: String) {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-    process.arguments = [command] + arguments
-    if let currentDirectory {
-        process.currentDirectoryURL = currentDirectory
-    }
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = pipe
-    try process.run()
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    process.waitUntilExit()
-    return (process.terminationStatus, String(data: data, encoding: .utf8) ?? "")
+/// Session storage that never touches the keychain — tests only.
+final class MemoryIdentityStorage: ShovelbaseIdentityStorage, @unchecked Sendable {
+    private var values: [String: Data] = [:]
+    func read(key: String) -> Data? { values[key] }
+    func write(key: String, value: Data) { values[key] = value }
+    func remove(key: String) { values[key] = nil }
 }

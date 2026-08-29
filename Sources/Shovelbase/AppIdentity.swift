@@ -6,9 +6,9 @@
 // comment for why the browser/app handoff (magic-link click-through, OAuth
 // provider redirect) is safe with no local state.
 //
-// A separate, project-scoped end-user population from `.auth` (GoTrue) —
-// not an extension of it. Email/password arrived with R3 (#230) and native
-// id_token sign-in after it; what this file still deliberately lacks is
+// This project's own end-user population, and since 1.0 the only auth
+// surface the package has (#209). Email/password arrived with R3 (#230) and
+// native id_token sign-in after it; what this file still deliberately lacks is
 // resetPasswordForEmail, confirm and invite — a forgotten password is
 // recovered with a magic link, then changePassword.
 //
@@ -544,6 +544,24 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
       }
       throw error
     }
+  }
+
+  /// Refreshes only if the current session has expired or is about to.
+  ///
+  /// The scheduled refresh (`autoRefresh`) cannot be relied on by itself:
+  /// a backgrounded app has its timers throttled and a sleeping device stops
+  /// them, so the session in memory when the person returns may already be
+  /// dead. Every call that carries a session token — `functions.invoke`,
+  /// `push.register` — goes through here first so it sends a live one rather
+  /// than discovering the problem as a 401. A failure is not thrown on:
+  /// the caller should still make its request and let the server rule.
+  public func ensureFreshSession() async throws {
+    guard let session else { return }
+    guard let expiresAt = Self.parseDate(session.sessionExpiresAt) else { return }
+    // The same 60s lead the scheduled refresh uses, so both agree on "about
+    // to expire" and a call made just before the timer fires still refreshes.
+    guard expiresAt.timeIntervalSinceNow <= 60 else { return }
+    _ = try await refresh()
   }
 
   /// Signs out. Best-effort revoke on the server; clears local state
