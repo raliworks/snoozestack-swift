@@ -1,5 +1,7 @@
 # shovelbase-swift
 
+> Part of the [codebase guide](../CODEBASE.md). Neighbors: [sdk](../sdk/README.md) · [portal-ios](../portal-ios/README.md)
+
 Swift client for [shovelbase](../README.md) projects on iOS, macOS, tvOS, and
 watchOS — application identity, functions, signals and push.
 
