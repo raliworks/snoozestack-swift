@@ -1,16 +1,16 @@
-// Shovelbase — Swift client for shovelbase projects.
+// Snoozestack — Swift client for snoozestack projects.
 //
-//     import Shovelbase
+//     import Snoozestack
 //
-//     let shovelbase = Shovelbase.createClient(
+//     let snoozestack = Snoozestack.createClient(
 //         url: "https://<project-ref>.shovelbase.com",   // SHOVELBASE_URL from the portal
 //         key: "<SHOVELBASE_ANON_KEY>"
 //     )
 //
-//     try await shovelbase.identity.signInWithPassword(email: email, password: password)
-//     let reply: Reply = try await shovelbase.functions.invoke("kyd-golf-chat")
-//     shovelbase.signals.track("signup", properties: ["plan": "pro"])
-//     try await shovelbase.push.register(deviceToken: token)
+//     try await snoozestack.identity.signInWithPassword(email: email, password: password)
+//     let reply: Reply = try await snoozestack.functions.invoke("kyd-golf-chat")
+//     snoozestack.signals.track("signup", properties: ["plan": "pro"])
+//     try await snoozestack.push.register(deviceToken: token)
 //
 // As of 1.0 this package has no third-party dependencies (#209). It used to
 // wrap the upstream supabase client, which is why the surface below is
@@ -26,7 +26,7 @@
 //   .rpc()      database from a committed function — it already has
 //               SHOVELBASE_DB_URL — and call it via `functions.invoke`.
 //   .base       removed — there is no wrapped client to reach past this one to.
-//   realtime    never supported by shovelbase.
+//   realtime    never supported by snoozestack.
 //
 // These are gone, not deprecated: the package majored to 1.0 to say so, and
 // SPM consumers pin versions, so nothing already shipped changes under them.
@@ -34,7 +34,7 @@ import Foundation
 @_exported import ShovelbaseSignals
 @_exported import ShovelbasePush
 
-/// The shovelbase client. Created by ``Shovelbase/createClient(url:key:signals:identity:)``.
+/// The snoozestack client. Created by ``Snoozestack/createClient(url:key:signals:identity:)``.
 public final class ShovelbaseClient: Sendable {
     /// The resolved project base every service path is built from.
     public let url: String
@@ -56,7 +56,7 @@ public final class ShovelbaseClient: Sendable {
 
 public enum Shovelbase {
 
-    /// Creates a shovelbase client. `url` is your project URL
+    /// Creates a snoozestack client. `url` is your project URL
     /// (`https://<ref>.shovelbase.com`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
@@ -99,7 +99,7 @@ public enum Shovelbase {
 extension ShovelbaseClient {
     /// Mixpanel-style event tracking (Signals), charted on the portal's Signals
     /// page. Alias for `ShovelbaseSignals.shared` (configured by
-    /// `Shovelbase.createClient`).
+    /// `Snoozestack.createClient`).
     public var signals: ShovelbaseSignals { ShovelbaseSignals.shared }
 
     /// Deprecated alias of ``signals``.
@@ -107,7 +107,7 @@ extension ShovelbaseClient {
     public var analytics: ShovelbaseSignals { ShovelbaseSignals.shared }
 
     /// Push notification registration. Alias for `ShovelbasePush.shared`
-    /// (configured by `Shovelbase.createClient`, including the token provider
+    /// (configured by `Snoozestack.createClient`, including the token provider
     /// that binds a device to the signed-in user).
     ///
     /// There is no send method: pushes are sent server-side, off a queue

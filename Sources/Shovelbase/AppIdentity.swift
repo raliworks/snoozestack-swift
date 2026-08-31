@@ -187,7 +187,7 @@ public final class KeychainIdentityStorage: ShovelbaseIdentityStorage, @unchecke
 public final class ShovelbaseIdentity: @unchecked Sendable {
   public struct Options: Sendable {
     /// "default" (live), "dev", or "preview:<name>" — must match the
-    /// namespace `shovelbase auth push` configured redirect_urls/providers
+    /// namespace `snoozestack auth push` configured redirect_urls/providers
     /// for. Defaults to "default".
     public var namespace: String
     public var storage: any ShovelbaseIdentityStorage

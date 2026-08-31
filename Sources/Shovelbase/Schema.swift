@@ -1,12 +1,12 @@
 // Reads a project's schema.json (Epic A2: A2.1's portable type vocabulary,
 // A2.3's versioned artifact) from Swift — see this file's own top-level
-// doc comment on Shovelbase.swift for what this SDK actually is.
+// doc comment on Snoozestack.swift for what this SDK actually is.
 //
 // SCOPE NOTE (A2.6, #51): this SDK is a device-side client — there is no
 // build step, no local filesystem project, and (for Tier 0 SQLite apps) no
 // on-device database file for Swift code to author a schema into or apply a
 // migration against; both already happen entirely through the JS SDK + CLI
-// (`shovelbase schema build/push`, `shovelbase migration generate`, `db
+// (`snoozestack schema build/push`, `snoozestack migration generate`, `db
 // push`), exactly the way Postgres/Tier 1 migrations already work today.
 // So "parity" here is read-only: a typed Swift decoding of the same
 // schema.json shape A2.1 emits, for client code that wants to introspect a
@@ -192,7 +192,7 @@ public struct ShovelbaseSchemaConstraint: Codable, Equatable, Sendable {
 }
 
 extension ShovelbaseSchema {
-    /// Decodes a schema.json document (as emitted by `shovelbase schema
+    /// Decodes a schema.json document (as emitted by `snoozestack schema
     /// build`/`push`, A2.3) from raw bytes.
     public static func decode(_ data: Data) throws -> ShovelbaseSchema {
         try JSONDecoder().decode(ShovelbaseSchema.self, from: data)

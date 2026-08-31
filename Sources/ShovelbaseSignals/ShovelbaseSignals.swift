@@ -1,4 +1,4 @@
-// ShovelbaseSignals — Mixpanel-style event tracking for shovelbase projects.
+// ShovelbaseSignals — Mixpanel-style event tracking for snoozestack projects.
 //
 // Events are queued (and persisted to disk, so they survive app kills),
 // batched, and POSTed to `<SHOVELBASE_URL>/signals/v1/events`, where the

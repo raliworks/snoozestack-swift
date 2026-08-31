@@ -4,7 +4,7 @@
 // (#209). The wire contract is unchanged — POST (or an explicit method) to
 // `<base>/functions/v1/<name>`, `apikey` plus a bearer token, a JSON body —
 // so a function called from Swift and the same one called from
-// shovelbase-js see identical requests.
+// snoozestack-js see identical requests.
 //
 // A call automatically carries the signed-in application user's session
 // (`Authorization: Bearer <session_token>`, the transport convention #100's

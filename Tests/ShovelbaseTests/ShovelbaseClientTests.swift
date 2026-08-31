@@ -6,7 +6,7 @@
 // (#151). 1.0 dropped the dependency (#209), so there is nothing left to
 // inherit from and nothing to guard against; what is worth pinning now is
 // that a function call still puts the same bytes on the wire that
-// shovelbase-js does.
+// snoozestack-js does.
 //
 // No workflow builds sdk-swift on a PR (.github/workflows/sdk-swift.yml only
 // publishes, on push to master) — `swift test` from sdk-swift/ is the bar.
@@ -109,7 +109,7 @@ final class ShovelbaseClientTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "apikey"), "test-anon-key")
         // No session yet, so the api key is the bearer — same default as
-        // shovelbase-js.
+        // snoozestack-js.
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-anon-key")
     }
 

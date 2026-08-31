@@ -1,13 +1,13 @@
-// ShovelbasePush — registers a device for push notifications with a shovelbase
+// ShovelbasePush — registers a device for push notifications with a snoozestack
 // project.
 //
 //     func application(_ app: UIApplication,
 //                      didRegisterForRemoteNotificationsWithDeviceToken token: Data) {
-//         Task { try? await shovelbase.push.register(deviceToken: token) }
+//         Task { try? await snoozestack.push.register(deviceToken: token) }
 //     }
 //
 //     // on sign-out:
-//     try await shovelbase.push.unregister()
+//     try await snoozestack.push.unregister()
 //
 // The token is POSTed to `<SHOVELBASE_URL>/push/v1/devices`, where the project
 // records it against the signed-in user. Sending is server-side: a queue
@@ -49,13 +49,13 @@ public final class ShovelbasePush {
 
     public static let shared = ShovelbasePush()
 
-    /// Call once, early — `Shovelbase.createClient` does it for you.
+    /// Call once, early — `Snoozestack.createClient` does it for you.
     public static func configure(url: String, apiKey: String) {
         shared.configure(url: url, apiKey: apiKey)
     }
 
     /// Supplies the signed-in user's access token, so the server can bind the
-    /// device to `auth.users.id`. `Shovelbase.createClient` wires this to the
+    /// device to `auth.users.id`. `Snoozestack.createClient` wires this to the
     /// auth client; standalone users may set it themselves. Returning nil
     /// registers the device unattached, and the next launch binds it.
     public var accessTokenProvider: (@Sendable () async -> String?)?

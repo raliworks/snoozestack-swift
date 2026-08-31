@@ -21,7 +21,7 @@ let package = Package(
         // Push notification registration only — no third-party dependencies.
         .library(name: "ShovelbasePush", targets: ["ShovelbasePush"]),
         // snoozestack-named faces of the same modules (the product rename).
-        // The Shovelbase* names above stay for existing importers.
+        // The Snoozestack* names above stay for existing importers.
         .library(name: "Snoozestack", targets: ["Snoozestack"]),
         .library(name: "SnoozestackSignals", targets: ["SnoozestackSignals"]),
         .library(name: "SnoozestackPush", targets: ["SnoozestackPush"]),
