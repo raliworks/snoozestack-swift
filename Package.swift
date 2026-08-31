@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "shovelbase-swift",
+    name: "snoozestack-swift",
     // No third-party dependencies in any target as of 1.0 (#209); the floors
     // below are what the SDK's own async/Sendable use needs.
     platforms: [
@@ -20,6 +20,11 @@ let package = Package(
         .library(name: "ShovelbaseAnalytics", targets: ["ShovelbaseAnalytics"]),
         // Push notification registration only — no third-party dependencies.
         .library(name: "ShovelbasePush", targets: ["ShovelbasePush"]),
+        // snoozestack-named faces of the same modules (the product rename).
+        // The Shovelbase* names above stay for existing importers.
+        .library(name: "Snoozestack", targets: ["Snoozestack"]),
+        .library(name: "SnoozestackSignals", targets: ["SnoozestackSignals"]),
+        .library(name: "SnoozestackPush", targets: ["SnoozestackPush"]),
     ],
     dependencies: [],
     targets: [
@@ -40,8 +45,13 @@ let package = Package(
             path: "Sources/ShovelbaseAnalytics"
         ),
         .target(name: "ShovelbasePush", path: "Sources/ShovelbasePush"),
+        // Thin re-exports under the post-rename names (same pattern as
+        // ShovelbaseAnalytics below-left for the Signals rename).
+        .target(name: "Snoozestack", dependencies: ["Shovelbase"], path: "Sources/Snoozestack"),
+        .target(name: "SnoozestackSignals", dependencies: ["ShovelbaseSignals"], path: "Sources/SnoozestackSignals"),
+        .target(name: "SnoozestackPush", dependencies: ["ShovelbasePush"], path: "Sources/SnoozestackPush"),
         // Smoke tests for the client's own wiring, plus the application
-        // identity contract shared with shovelbase-js.
+        // identity contract shared with snoozestack-js.
         .testTarget(
             name: "ShovelbaseTests",
             dependencies: ["Shovelbase"],

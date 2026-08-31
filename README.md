@@ -1,8 +1,8 @@
-# shovelbase-swift
+# snoozestack-swift
 
 > Part of the [codebase guide](../CODEBASE.md). Neighbors: [sdk](../sdk/README.md) · [portal-ios](../portal-ios/README.md)
 
-Swift client for [shovelbase](../README.md) projects on iOS, macOS, tvOS, and
+Swift client for [snoozestack](../README.md) projects on iOS, macOS, tvOS, and
 watchOS — application identity, functions, signals and push.
 
 As of 1.0 the package has no third-party dependencies (#209). It used to wrap
@@ -20,35 +20,35 @@ versions, so nothing already shipped changes under you.
 
 Library products:
 
-- **`Shovelbase`** — the full client (`Shovelbase.createClient`, `.identity`,
+- **`Snoozestack`** — the full client (`Snoozestack.createClient`, `.identity`,
   `.functions`, `.signals`, `.push`).
-- **`ShovelbaseSignals`** — event tracking only; a single file, if you don't
+- **`SnoozestackSignals`** — event tracking only; a single file, if you don't
   need the rest. (`ShovelbaseAnalytics` remains as a deprecated alias product.)
-- **`ShovelbasePush`** — push notification registration only.
+- **`SnoozestackPush`** — push notification registration only.
 
 ## Install
 
-The package is served as a git repo from `shovelbase.com` — it is **not** on
+The package is served as a git repo from `snoozestack.com` — it is **not** on
 GitHub or any package index. In Xcode: **File → Add Package Dependencies…**,
 paste
 
 ```
-https://shovelbase.com/swift/shovelbase-swift.git
+https://snoozestack.com/swift/snoozestack-swift.git
 ```
 
-choose **Up to Next Major Version** from `0.2.0`, and add the `Shovelbase`
+choose **Up to Next Major Version** from `0.2.0`, and add the `Snoozestack`
 library to your app target. Or in a `Package.swift`:
 
 ```swift
 dependencies: [
     .package(
-        url: "https://shovelbase.com/swift/shovelbase-swift.git",
+        url: "https://snoozestack.com/swift/snoozestack-swift.git",
         from: "0.2.0"
     ),
 ],
 targets: [
     .target(name: "MyApp", dependencies: [
-        .product(name: "Shovelbase", package: "shovelbase-swift"),
+        .product(name: "Snoozestack", package: "snoozestack-swift"),
     ]),
 ]
 ```
@@ -61,52 +61,52 @@ Xcode (*File → Packages → Update to Latest Package Versions*).
 ## Use
 
 ```swift
-import Shovelbase
+import Snoozestack
 
 // Once, at launch (e.g. in your App init).
 // URL + anon key: portal → Project Settings → API.
-let shovelbase = Shovelbase.createClient(
-    url: "https://<project-ref>.shovelbase.com",   // SHOVELBASE_URL
+let snoozestack = Snoozestack.createClient(
+    url: "https://<project-ref>.snoozestack.com",   // SHOVELBASE_URL
     key: "<SHOVELBASE_ANON_KEY>"
 )
 
 // Application identity
-let user = try await shovelbase.identity.signInWithPassword(email: email, password: password)
+let user = try await snoozestack.identity.signInWithPassword(email: email, password: password)
 
 // Functions — POST by default, and the signed-in session is attached for you
-let reply: ChatReply = try await shovelbase.functions
+let reply: ChatReply = try await snoozestack.functions
     .invoke("kyd-golf-chat", body: ["messages": messages])
 
 // Signals (event tracking; charted on the portal's Signals page)
-shovelbase.signals.identify(user.id)  // merges their anonymous history in
-shovelbase.signals.track("signup", properties: ["plan": "pro"])
-shovelbase.signals.reset()                        // on sign-out
+snoozestack.signals.identify(user.id)  // merges their anonymous history in
+snoozestack.signals.track("signup", properties: ["plan": "pro"])
+snoozestack.signals.reset()                        // on sign-out
 ```
 
-Supporting types come from the same `import Shovelbase`. Not supported:
+Supporting types come from the same `import Snoozestack`. Not supported:
 realtime subscriptions.
 
 ### Application identity (magic link, password, OAuth, sessions)
 
 `.identity` is sign-in for your own hosted application's users — this
-project's own end-user population, not shovelbase operators. See
+project's own end-user population, not snoozestack operators. See
 `../docs/app-identity-client-contract.md` for the full state machine and
 error taxonomy (shared with the JS SDK).
 
 ```swift
-try await shovelbase.identity.requestMagicLink(
+try await snoozestack.identity.requestMagicLink(
     email: email, redirectTo: "https://myapp.example.com/callback"
 )
 // ... user clicks the emailed link; your app opens on
 //     https://myapp.example.com/callback?token=... ...
-let result = try await shovelbase.identity.completeMagicLink(token: token)
+let result = try await snoozestack.identity.completeMagicLink(token: token)
 result.user.email
 
-// shovelbase.functions.invoke(...) automatically carries
+// snoozestack.functions.invoke(...) automatically carries
 // `.identity`'s session once one exists — no extra wiring needed.
-let reply: ChatReply = try await shovelbase.functions.invoke("kyd-golf-chat", body: ["messages": messages])
+let reply: ChatReply = try await snoozestack.functions.invoke("kyd-golf-chat", body: ["messages": messages])
 
-await shovelbase.identity.signOut()
+await snoozestack.identity.signOut()
 ```
 
 OAuth: `startOAuth(provider:redirectTo:)` returns the authorize URL to open
@@ -114,7 +114,7 @@ OAuth: `startOAuth(provider:redirectTo:)` returns the authorize URL to open
 universal-link handler passes the resulting `redirectTo` URL to
 `completeOAuthCallback(url:)`.
 
-`shovelbase.identity.onStateChange { state, session, user in ... }` observes
+`snoozestack.identity.onStateChange { state, session, user in ... }` observes
 `.anonymous` / `.pending` / `.authenticated` / `.expired` reactively.
 
 ### Sign in with Apple
@@ -124,7 +124,7 @@ Native apps sign in by ID token — pass the credential from
 app:
 
 ```swift
-let result = try await shovelbase.identity.signInWithIdToken(
+let result = try await snoozestack.identity.signInWithIdToken(
     provider: "apple", idToken: idToken, nonce: nonce
 )
 result.user.email
@@ -151,14 +151,14 @@ call is rejected — see `../docs/app-identity-client-contract.md`.
 - Events are persisted to disk, so they survive app kills.
 - Batches flush every 10 s, at 20 queued events, and when the app is
   backgrounded (tunable via the `signals:` parameter of `createClient`,
-  or `ShovelbaseSignals.Options` standalone).
+  or `SnoozestackSignals.Options` standalone).
 - Each event carries an `insert_id`, so a batch retried after a network
   timeout is never double-counted.
 - Default properties sent with every event: `$os`, `$os_version`,
   `$app_version`, `$sdk`.
 - Property values must be JSON-encodable; anything else is stringified.
 
-Using signals without the client: add the `ShovelbaseSignals` product
-instead and call `ShovelbaseSignals.configure(url:apiKey:)` at launch.
-(`shovelbase.analytics` and the `ShovelbaseAnalytics` product remain as
+Using signals without the client: add the `SnoozestackSignals` product
+instead and call `SnoozestackSignals.configure(url:apiKey:)` at launch.
+(`snoozestack.analytics` and the `ShovelbaseAnalytics` product remain as
 deprecated aliases.)
