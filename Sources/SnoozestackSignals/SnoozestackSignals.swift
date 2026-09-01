@@ -1,18 +1,18 @@
-// ShovelbaseSignals — Mixpanel-style event tracking for snoozestack projects.
+// SnoozestackSignals — Mixpanel-style event tracking for snoozestack projects.
 //
 // Events are queued (and persisted to disk, so they survive app kills),
-// batched, and POSTed to `<SHOVELBASE_URL>/signals/v1/events`, where the
+// batched, and POSTed to `<SNOOZESTACK_URL>/signals/v1/events`, where the
 // portal charts them on the Signals page.
 //
-//     ShovelbaseSignals.configure(
-//         url: "http://<host>/sb/<project-ref>",   // SHOVELBASE_URL
+//     SnoozestackSignals.configure(
+//         url: "http://<host>/sb/<project-ref>",   // SNOOZESTACK_URL
 //         apiKey: "<anon key>"
 //     )
-//     ShovelbaseSignals.shared.identify(user.id)
-//     ShovelbaseSignals.shared.track("signup", properties: ["plan": "pro"])
+//     SnoozestackSignals.shared.identify(user.id)
+//     SnoozestackSignals.shared.track("signup", properties: ["plan": "pro"])
 //
-// `ShovelbaseAnalytics` remains as a deprecated alias (see the bottom of this
-// file, and the ShovelbaseAnalytics compat target).
+// `SnoozestackAnalytics` remains as a deprecated alias (see the bottom of this
+// file, and the SnoozestackAnalytics compat target).
 //
 // Tracking never throws and never blocks the caller; all work happens on a
 // private serial queue. Failed batches are retried on the next flush.
@@ -21,7 +21,7 @@ import Foundation
 import UIKit
 #endif
 
-public final class ShovelbaseSignals {
+public final class SnoozestackSignals {
 
     public struct Options {
         /// How often the queue is flushed to the server. Default 10 s.
@@ -34,7 +34,7 @@ public final class ShovelbaseSignals {
         public init() {}
     }
 
-    public static let shared = ShovelbaseSignals()
+    public static let shared = SnoozestackSignals()
 
     /// Call once, early (e.g. in `application(_:didFinishLaunching…)`).
     /// `url` is the project URL (`http://<host>/sb/<ref>`), `apiKey` the anon key.
@@ -44,7 +44,7 @@ public final class ShovelbaseSignals {
 
     // MARK: - Internal state (all mutated on `queue`)
 
-    private let queue = DispatchQueue(label: "com.shovelbase.signals")
+    private let queue = DispatchQueue(label: "com.snoozestack.signals")
     private let session: URLSession
     private var endpoint: URL?
     private var apiKey = ""
@@ -54,7 +54,7 @@ public final class ShovelbaseSignals {
     private var isFlushing = false
     private var timer: DispatchSourceTimer?
 
-    private static let distinctIdKey = "shovelbase_distinct_id"
+    private static let distinctIdKey = "snoozestack_distinct_id"
     private static let maxBatch = 100 // server-side cap per request
 
     // Reserved events that assert identity rather than record activity. The
@@ -285,7 +285,7 @@ public final class ShovelbaseSignals {
         guard let dir = FileManager.default.urls(
             for: .applicationSupportDirectory, in: .userDomainMask
         ).first else { return nil }
-        let folder = dir.appendingPathComponent("shovelbase", isDirectory: true)
+        let folder = dir.appendingPathComponent("snoozestack", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // Filename unchanged across the Analytics → Signals rename so events
         // already queued by an older build survive the upgrade.
@@ -326,7 +326,7 @@ public final class ShovelbaseSignals {
     }()
 
     private static var defaultProperties: [String: Any] {
-        var props: [String: Any] = ["$sdk": "shovelbase-swift"]
+        var props: [String: Any] = ["$sdk": "snoozestack-swift"]
         #if os(iOS)
         props["$os"] = "iOS"
         #elseif os(macOS)
@@ -363,7 +363,7 @@ public final class ShovelbaseSignals {
     }
 }
 
-/// Renamed to ``ShovelbaseSignals``; kept as an alias so existing call sites
-/// (`ShovelbaseAnalytics.configure`, `ShovelbaseAnalytics.shared`) keep working.
-@available(*, deprecated, renamed: "ShovelbaseSignals")
-public typealias ShovelbaseAnalytics = ShovelbaseSignals
+/// Renamed to ``SnoozestackSignals``; kept as an alias so existing call sites
+/// (`SnoozestackAnalytics.configure`, `SnoozestackAnalytics.shared`) keep working.
+@available(*, deprecated, renamed: "SnoozestackSignals")
+public typealias SnoozestackAnalytics = SnoozestackSignals

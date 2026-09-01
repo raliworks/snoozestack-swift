@@ -12,8 +12,8 @@ are gone:
 | Removed | Replacement |
 |---|---|
 | `.auth` | `.identity` — application identity, below |
-| `.storage` | a function that returns a signed URL; PUT to it directly. For a public bucket, build the object URL: `<SHOVELBASE_URL>/storage/v1/object/public/<bucket>/<path>` |
-| `.from()` / `.schema()` / `.rpc()` | removed with PostgREST (`../docs/migrations/postgrest-removal.md`) — read or write the database from a committed function, over its own `SHOVELBASE_DB_URL` |
+| `.storage` | a function that returns a signed URL; PUT to it directly. For a public bucket, build the object URL: `<SNOOZESTACK_URL>/storage/v1/object/public/<bucket>/<path>` |
+| `.from()` / `.schema()` / `.rpc()` | removed with PostgREST (`../docs/migrations/postgrest-removal.md`) — read or write the database from a committed function, over its own `SNOOZESTACK_DB_URL` |
 
 `.base` (the wrapped upstream client) is gone with them. SPM consumers pin
 versions, so nothing already shipped changes under you.
@@ -23,7 +23,7 @@ Library products:
 - **`Snoozestack`** — the full client (`Snoozestack.createClient`, `.identity`,
   `.functions`, `.signals`, `.push`).
 - **`SnoozestackSignals`** — event tracking only; a single file, if you don't
-  need the rest. (`ShovelbaseAnalytics` remains as a deprecated alias product.)
+  need the rest. (`SnoozestackAnalytics` remains as a deprecated alias product.)
 - **`SnoozestackPush`** — push notification registration only.
 
 ## Install
@@ -66,8 +66,8 @@ import Snoozestack
 // Once, at launch (e.g. in your App init).
 // URL + anon key: portal → Project Settings → API.
 let snoozestack = Snoozestack.createClient(
-    url: "https://<project-ref>.snoozestack.com",   // SHOVELBASE_URL
-    key: "<SHOVELBASE_ANON_KEY>"
+    url: "https://<project-ref>.snoozestack.com",   // SNOOZESTACK_URL
+    key: "<SNOOZESTACK_ANON_KEY>"
 )
 
 // Application identity
@@ -160,5 +160,5 @@ call is rejected — see `../docs/app-identity-client-contract.md`.
 
 Using signals without the client: add the `SnoozestackSignals` product
 instead and call `SnoozestackSignals.configure(url:apiKey:)` at launch.
-(`snoozestack.analytics` and the `ShovelbaseAnalytics` product remain as
+(`snoozestack.analytics` and the `SnoozestackAnalytics` product remain as
 deprecated aliases.)

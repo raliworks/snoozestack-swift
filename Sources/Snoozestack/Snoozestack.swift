@@ -3,8 +3,8 @@
 //     import Snoozestack
 //
 //     let snoozestack = Snoozestack.createClient(
-//         url: "https://<project-ref>.shovelbase.com",   // SHOVELBASE_URL from the portal
-//         key: "<SHOVELBASE_ANON_KEY>"
+//         url: "https://<project-ref>.snoozestack.com",   // SNOOZESTACK_URL from the portal
+//         key: "<SNOOZESTACK_ANON_KEY>"
 //     )
 //
 //     try await snoozestack.identity.signInWithPassword(email: email, password: password)
@@ -24,70 +24,70 @@
 //   .from()     removed with PostgREST itself (#123, see
 //   .schema()   docs/migrations/postgrest-removal.md). Query or write the
 //   .rpc()      database from a committed function — it already has
-//               SHOVELBASE_DB_URL — and call it via `functions.invoke`.
+//               SNOOZESTACK_DB_URL — and call it via `functions.invoke`.
 //   .base       removed — there is no wrapped client to reach past this one to.
 //   realtime    never supported by snoozestack.
 //
 // These are gone, not deprecated: the package majored to 1.0 to say so, and
 // SPM consumers pin versions, so nothing already shipped changes under them.
 import Foundation
-@_exported import ShovelbaseSignals
-@_exported import ShovelbasePush
+@_exported import SnoozestackSignals
+@_exported import SnoozestackPush
 
 /// The snoozestack client. Created by ``Snoozestack/createClient(url:key:signals:identity:)``.
-public final class ShovelbaseClient: Sendable {
+public final class SnoozestackClient: Sendable {
     /// The resolved project base every service path is built from.
     public let url: String
 
     /// Magic link, password, OAuth, sessions and sign-out for this project's
     /// own hosted application (#101). See AppIdentity.swift.
-    public let identity: ShovelbaseIdentity
+    public let identity: SnoozestackIdentity
 
     /// Calling this project's functions. A call carries `identity`'s current
     /// session automatically — see FunctionsClient.swift.
-    public let functions: ShovelbaseFunctionsClient
+    public let functions: SnoozestackFunctionsClient
 
-    init(url: String, identity: ShovelbaseIdentity, functions: ShovelbaseFunctionsClient) {
+    init(url: String, identity: SnoozestackIdentity, functions: SnoozestackFunctionsClient) {
         self.url = url
         self.identity = identity
         self.functions = functions
     }
 }
 
-public enum Shovelbase {
+public enum Snoozestack {
 
     /// Creates a snoozestack client. `url` is your project URL
-    /// (`https://<ref>.shovelbase.com`), `key` the anon key (apps) or the
+    /// (`https://<ref>.snoozestack.com`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
-    /// Also configures `ShovelbaseSignals.shared` and `ShovelbasePush.shared`
+    /// Also configures `SnoozestackSignals.shared` and `SnoozestackPush.shared`
     /// against the same project, so `client.signals.track(…)` and
     /// `client.push.register(…)` work immediately. `signals` tunes event
     /// batching (flush interval, batch size); `identity` tunes the
     /// application-identity client (namespace, session storage,
-    /// auto-refresh — see `ShovelbaseIdentity.Options`).
+    /// auto-refresh — see `SnoozestackIdentity.Options`).
     public static func createClient(
         url: String,
         key: String,
-        signals signalsOptions: ShovelbaseSignals.Options = .init(),
-        identity identityOptions: ShovelbaseIdentity.Options = .init()
-    ) -> ShovelbaseClient {
+        signals signalsOptions: SnoozestackSignals.Options = .init(),
+        identity identityOptions: SnoozestackIdentity.Options = .init()
+    ) -> SnoozestackClient {
         var base = url
         while base.hasSuffix("/") { base.removeLast() }
         guard !base.isEmpty, !key.isEmpty, URL(string: base) != nil else {
-            preconditionFailure("Shovelbase.createClient(url:key:) requires the project URL and an API key")
+            preconditionFailure("Snoozestack.createClient(url:key:) requires the project URL and an API key")
         }
-        ShovelbaseSignals.configure(url: base, apiKey: key, options: signalsOptions)
-        ShovelbasePush.configure(url: base, apiKey: key)
+        SnoozestackSignals.configure(url: base, apiKey: key, options: signalsOptions)
+        SnoozestackPush.configure(url: base, apiKey: key)
 
-        let identity = ShovelbaseIdentity(url: base, apiKey: key, options: identityOptions)
-        let functions = ShovelbaseFunctionsClient(url: base, key: key, identity: identity)
-        let client = ShovelbaseClient(url: base, identity: identity, functions: functions)
+        let identity = SnoozestackIdentity(url: base, apiKey: key, options: identityOptions)
+        let functions = SnoozestackFunctionsClient(url: base, key: key, identity: identity)
+        let client = SnoozestackClient(url: base, identity: identity, functions: functions)
 
         // Lets push.register() attach the current session token, so the server
         // can bind the device to the signed-in user. Weak: the shared push
         // object outlives any one client and must not keep it alive.
-        ShovelbasePush.shared.accessTokenProvider = { [weak client] in
+        SnoozestackPush.shared.accessTokenProvider = { [weak client] in
             guard let client else { return nil }
             try? await client.identity.ensureFreshSession()
             return client.identity.session?.sessionToken
@@ -96,21 +96,21 @@ public enum Shovelbase {
     }
 }
 
-extension ShovelbaseClient {
+extension SnoozestackClient {
     /// Mixpanel-style event tracking (Signals), charted on the portal's Signals
-    /// page. Alias for `ShovelbaseSignals.shared` (configured by
+    /// page. Alias for `SnoozestackSignals.shared` (configured by
     /// `Snoozestack.createClient`).
-    public var signals: ShovelbaseSignals { ShovelbaseSignals.shared }
+    public var signals: SnoozestackSignals { SnoozestackSignals.shared }
 
     /// Deprecated alias of ``signals``.
     @available(*, deprecated, renamed: "signals")
-    public var analytics: ShovelbaseSignals { ShovelbaseSignals.shared }
+    public var analytics: SnoozestackSignals { SnoozestackSignals.shared }
 
-    /// Push notification registration. Alias for `ShovelbasePush.shared`
+    /// Push notification registration. Alias for `SnoozestackPush.shared`
     /// (configured by `Snoozestack.createClient`, including the token provider
     /// that binds a device to the signed-in user).
     ///
     /// There is no send method: pushes are sent server-side, off a queue
     /// trigger, because a client that could enqueue one could notify anybody.
-    public var push: ShovelbasePush { ShovelbasePush.shared }
+    public var push: SnoozestackPush { SnoozestackPush.shared }
 }

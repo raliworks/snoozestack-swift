@@ -20,25 +20,25 @@ import Foundation
 /// A project's schema.json, decoded — mirrors `sdk/src/schema.js`'s IR exactly
 /// (same field names, same shape) so a schema.json emitted by the JS SDK
 /// round-trips through this decoder unchanged.
-public struct ShovelbaseSchema: Codable, Equatable, Sendable {
-    public var tables: [ShovelbaseSchemaTable]
+public struct SnoozestackSchema: Codable, Equatable, Sendable {
+    public var tables: [SnoozestackSchemaTable]
 
-    public init(tables: [ShovelbaseSchemaTable]) {
+    public init(tables: [SnoozestackSchemaTable]) {
         self.tables = tables
     }
 }
 
-public struct ShovelbaseSchemaTable: Codable, Equatable, Sendable {
+public struct SnoozestackSchemaTable: Codable, Equatable, Sendable {
     public var name: String
-    public var columns: [ShovelbaseSchemaColumn]
-    public var indexes: [ShovelbaseSchemaIndex]
-    public var constraints: [ShovelbaseSchemaConstraint]
+    public var columns: [SnoozestackSchemaColumn]
+    public var indexes: [SnoozestackSchemaIndex]
+    public var constraints: [SnoozestackSchemaConstraint]
 
     public init(
         name: String,
-        columns: [ShovelbaseSchemaColumn],
-        indexes: [ShovelbaseSchemaIndex] = [],
-        constraints: [ShovelbaseSchemaConstraint] = []
+        columns: [SnoozestackSchemaColumn],
+        indexes: [SnoozestackSchemaIndex] = [],
+        constraints: [SnoozestackSchemaConstraint] = []
     ) {
         self.name = name
         self.columns = columns
@@ -51,7 +51,7 @@ public struct ShovelbaseSchemaTable: Codable, Equatable, Sendable {
 /// a plain `String` `RawRepresentable` rather than an exhaustive enum, so a
 /// schema.json written by a newer JS SDK with one more type than this SDK
 /// knows about still decodes instead of throwing.
-public struct ShovelbaseSchemaType: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
+public struct SnoozestackSchemaType: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -76,7 +76,7 @@ public struct ShovelbaseSchemaType: RawRepresentable, Codable, Equatable, Sendab
 /// A column's `default`, which in schema.json is a JSON literal (string,
 /// number, boolean) or `null` — never an object/array (`schema.js`'s own
 /// `formatLiteral` only accepts those three primitive kinds).
-public enum ShovelbaseSchemaDefault: Codable, Equatable, Sendable {
+public enum SnoozestackSchemaDefault: Codable, Equatable, Sendable {
     case string(String)
     case number(Double)
     case boolean(Bool)
@@ -111,13 +111,13 @@ public enum ShovelbaseSchemaDefault: Codable, Equatable, Sendable {
     }
 }
 
-public struct ShovelbaseSchemaColumn: Codable, Equatable, Sendable {
+public struct SnoozestackSchemaColumn: Codable, Equatable, Sendable {
     public var name: String
-    public var type: ShovelbaseSchemaType
+    public var type: SnoozestackSchemaType
     public var nullable: Bool
-    public var `default`: ShovelbaseSchemaDefault
+    public var `default`: SnoozestackSchemaDefault
 
-    public init(name: String, type: ShovelbaseSchemaType, nullable: Bool = true, default: ShovelbaseSchemaDefault = .null) {
+    public init(name: String, type: SnoozestackSchemaType, nullable: Bool = true, default: SnoozestackSchemaDefault = .null) {
         self.name = name
         self.type = type
         self.nullable = nullable
@@ -125,7 +125,7 @@ public struct ShovelbaseSchemaColumn: Codable, Equatable, Sendable {
     }
 }
 
-public struct ShovelbaseSchemaIndex: Codable, Equatable, Sendable {
+public struct SnoozestackSchemaIndex: Codable, Equatable, Sendable {
     public var name: String
     public var columns: [String]
     public var unique: Bool
@@ -139,7 +139,7 @@ public struct ShovelbaseSchemaIndex: Codable, Equatable, Sendable {
 
 /// `onDelete` action for a foreign-key constraint — matches `schema.js`'s
 /// `ON_DELETE_ACTIONS` (`cascade`, `setNull`, `restrict`, `noAction`).
-public struct ShovelbaseOnDeleteAction: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
+public struct SnoozestackOnDeleteAction: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -156,7 +156,7 @@ public struct ShovelbaseOnDeleteAction: RawRepresentable, Codable, Equatable, Se
     public static let noAction: Self = "noAction"
 }
 
-public struct ShovelbaseSchemaForeignKeyReference: Codable, Equatable, Sendable {
+public struct SnoozestackSchemaForeignKeyReference: Codable, Equatable, Sendable {
     public var table: String
     public var columns: [String]
 
@@ -172,17 +172,17 @@ public struct ShovelbaseSchemaForeignKeyReference: Codable, Equatable, Sendable 
 /// than a Swift enum with associated values) because that is the literal
 /// shape schema.json itself uses — decoding a real schema.json produced by
 /// the JS SDK should never require translating its shape first.
-public struct ShovelbaseSchemaConstraint: Codable, Equatable, Sendable {
+public struct SnoozestackSchemaConstraint: Codable, Equatable, Sendable {
     public var kind: String
     public var columns: [String]
-    public var references: ShovelbaseSchemaForeignKeyReference?
-    public var onDelete: ShovelbaseOnDeleteAction?
+    public var references: SnoozestackSchemaForeignKeyReference?
+    public var onDelete: SnoozestackOnDeleteAction?
 
     public init(
         kind: String,
         columns: [String],
-        references: ShovelbaseSchemaForeignKeyReference? = nil,
-        onDelete: ShovelbaseOnDeleteAction? = nil
+        references: SnoozestackSchemaForeignKeyReference? = nil,
+        onDelete: SnoozestackOnDeleteAction? = nil
     ) {
         self.kind = kind
         self.columns = columns
@@ -191,10 +191,10 @@ public struct ShovelbaseSchemaConstraint: Codable, Equatable, Sendable {
     }
 }
 
-extension ShovelbaseSchema {
+extension SnoozestackSchema {
     /// Decodes a schema.json document (as emitted by `snoozestack schema
     /// build`/`push`, A2.3) from raw bytes.
-    public static func decode(_ data: Data) throws -> ShovelbaseSchema {
-        try JSONDecoder().decode(ShovelbaseSchema.self, from: data)
+    public static func decode(_ data: Data) throws -> SnoozestackSchema {
+        try JSONDecoder().decode(SnoozestackSchema.self, from: data)
     }
 }

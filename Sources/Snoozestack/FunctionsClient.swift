@@ -17,7 +17,7 @@
 import Foundation
 
 /// A failed function call.
-public enum ShovelbaseFunctionsError: Error, LocalizedError {
+public enum SnoozestackFunctionsError: Error, LocalizedError {
   /// The function answered with a non-2xx status.
   case http(status: Int, message: String)
   /// The request never got an answer.
@@ -37,7 +37,7 @@ public enum ShovelbaseFunctionsError: Error, LocalizedError {
   }
 }
 
-public final class ShovelbaseFunctionsClient: Sendable {
+public final class SnoozestackFunctionsClient: Sendable {
   /// HTTP method for a function call. POST unless stated otherwise — a
   /// function call is a command by default; a reading function is a GET.
   public enum Method: String, Sendable {
@@ -50,9 +50,9 @@ public final class ShovelbaseFunctionsClient: Sendable {
 
   private let url: String
   private let key: String
-  private let identity: ShovelbaseIdentity
+  private let identity: SnoozestackIdentity
 
-  init(url: String, key: String, identity: ShovelbaseIdentity) {
+  init(url: String, key: String, identity: SnoozestackIdentity) {
     self.url = url
     self.key = key
     self.identity = identity
@@ -67,11 +67,11 @@ public final class ShovelbaseFunctionsClient: Sendable {
     hasJSONBody: Bool
   ) async throws -> Data {
     guard var components = URLComponents(string: "\(url)/functions/v1/\(functionName)") else {
-      throw ShovelbaseFunctionsError.http(status: 0, message: "Invalid function URL for \(functionName).")
+      throw SnoozestackFunctionsError.http(status: 0, message: "Invalid function URL for \(functionName).")
     }
     if !query.isEmpty { components.queryItems = query }
     guard let requestURL = components.url else {
-      throw ShovelbaseFunctionsError.http(status: 0, message: "Invalid function URL for \(functionName).")
+      throw SnoozestackFunctionsError.http(status: 0, message: "Invalid function URL for \(functionName).")
     }
 
     var request = URLRequest(url: requestURL)
@@ -100,7 +100,7 @@ public final class ShovelbaseFunctionsClient: Sendable {
     do {
       (data, response) = try await URLSession.shared.data(for: request)
     } catch {
-      throw ShovelbaseFunctionsError.transport(underlying: error)
+      throw SnoozestackFunctionsError.transport(underlying: error)
     }
 
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -114,7 +114,7 @@ public final class ShovelbaseFunctionsClient: Sendable {
       } else if let text = String(data: data, encoding: .utf8), !text.isEmpty {
         message = text
       }
-      throw ShovelbaseFunctionsError.http(status: status, message: message)
+      throw SnoozestackFunctionsError.http(status: status, message: message)
     }
     return data
   }
@@ -137,7 +137,7 @@ public final class ShovelbaseFunctionsClient: Sendable {
     do {
       return try decoder.decode(T.self, from: data)
     } catch {
-      throw ShovelbaseFunctionsError.decoding(underlying: error)
+      throw SnoozestackFunctionsError.decoding(underlying: error)
     }
   }
 
@@ -156,7 +156,7 @@ public final class ShovelbaseFunctionsClient: Sendable {
     do {
       return try decoder.decode(T.self, from: data)
     } catch {
-      throw ShovelbaseFunctionsError.decoding(underlying: error)
+      throw SnoozestackFunctionsError.decoding(underlying: error)
     }
   }
 

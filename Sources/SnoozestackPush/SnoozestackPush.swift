@@ -1,4 +1,4 @@
-// ShovelbasePush — registers a device for push notifications with a snoozestack
+// SnoozestackPush — registers a device for push notifications with a snoozestack
 // project.
 //
 //     func application(_ app: UIApplication,
@@ -9,7 +9,7 @@
 //     // on sign-out:
 //     try await snoozestack.push.unregister()
 //
-// The token is POSTed to `<SHOVELBASE_URL>/push/v1/devices`, where the project
+// The token is POSTed to `<SNOOZESTACK_URL>/push/v1/devices`, where the project
 // records it against the signed-in user. Sending is server-side: a queue
 // trigger names a user and the server fans out to that user's devices. There is
 // deliberately no send method here — a client that could enqueue a push could
@@ -19,7 +19,7 @@
 // system prompt appears, and that is the app's call, not the SDK's.
 import Foundation
 
-public final class ShovelbasePush {
+public final class SnoozestackPush {
 
     /// Which APNs world a build belongs to. Decided when the app is *built*,
     /// not at send time — a token from an Xcode build is only valid against
@@ -38,16 +38,16 @@ public final class ShovelbasePush {
         public var errorDescription: String? {
             switch self {
             case .notConfigured:
-                return "ShovelbasePush.configure(url:apiKey:) has not been called"
+                return "SnoozestackPush.configure(url:apiKey:) has not been called"
             case .simulatorUnsupported:
                 return "The simulator cannot receive APNs pushes (use `xcrun simctl push` instead)"
             case let .server(status, message):
-                return "shovelbase push registration failed (\(status)): \(message)"
+                return "snoozestack push registration failed (\(status)): \(message)"
             }
         }
     }
 
-    public static let shared = ShovelbasePush()
+    public static let shared = SnoozestackPush()
 
     /// Call once, early — `Snoozestack.createClient` does it for you.
     public static func configure(url: String, apiKey: String) {
@@ -65,8 +65,8 @@ public final class ShovelbasePush {
     private var endpoint: URL?
     private var apiKey = ""
 
-    private static let lastTokenKey = "shovelbase_push_token"
-    private static let lastUserKey = "shovelbase_push_user"
+    private static let lastTokenKey = "snoozestack_push_token"
+    private static let lastUserKey = "snoozestack_push_user"
 
     private init() {
         let config = URLSessionConfiguration.default

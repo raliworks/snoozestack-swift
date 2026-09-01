@@ -1,7 +1,7 @@
 // The client's own wiring, and the wire contract of functions.invoke().
 //
 // This file used to prove that `.from()`/`.schema()`/`.rpc()` were compile
-// errors on ShovelbaseClient — a guard that mattered while the type wrapped
+// errors on SnoozestackClient — a guard that mattered while the type wrapped
 // the upstream client and could re-inherit those names on a dependency bump
 // (#151). 1.0 dropped the dependency (#209), so there is nothing left to
 // inherit from and nothing to guard against; what is worth pinning now is
@@ -12,7 +12,7 @@
 // publishes, on push to master) — `swift test` from sdk-swift/ is the bar.
 import Foundation
 import XCTest
-@testable import Shovelbase
+@testable import Snoozestack
 
 /// Captures the request a call makes and answers with a canned response,
 /// without a network.
@@ -66,7 +66,7 @@ final class StubProtocol: URLProtocol {
 
 private struct OKResponse: Decodable { let ok: Bool }
 
-final class ShovelbaseClientTests: XCTestCase {
+final class SnoozestackClientTests: XCTestCase {
     override func setUp() {
         super.setUp()
         StubProtocol.reset()
@@ -78,9 +78,9 @@ final class ShovelbaseClientTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeClient() -> ShovelbaseClient {
-        Shovelbase.createClient(
-            url: "https://demo.shovelbase.com",
+    private func makeClient() -> SnoozestackClient {
+        Snoozestack.createClient(
+            url: "https://demo.snoozestack.com",
             key: "test-anon-key",
             // An in-memory store keeps the test off the real keychain.
             identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
@@ -89,15 +89,15 @@ final class ShovelbaseClientTests: XCTestCase {
 
     func testCreateClientExposesTheNativeSurface() {
         let client = makeClient()
-        XCTAssertEqual(client.url, "https://demo.shovelbase.com")
+        XCTAssertEqual(client.url, "https://demo.snoozestack.com")
         XCTAssertEqual(client.identity.state, .anonymous)
         // Trailing slashes are trimmed so every service path appends cleanly.
-        let trailing = Shovelbase.createClient(
-            url: "https://demo.shovelbase.com/",
+        let trailing = Snoozestack.createClient(
+            url: "https://demo.snoozestack.com/",
             key: "k",
             identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
         )
-        XCTAssertEqual(trailing.url, "https://demo.shovelbase.com")
+        XCTAssertEqual(trailing.url, "https://demo.snoozestack.com")
     }
 
     func testInvokePostsToFunctionsV1WithTheApiKey() async throws {
@@ -105,7 +105,7 @@ final class ShovelbaseClientTests: XCTestCase {
         let _: OKResponse = try await client.functions.invoke("wallets")
 
         let request = try XCTUnwrap(StubProtocol.lastRequest)
-        XCTAssertEqual(request.url?.absoluteString, "https://demo.shovelbase.com/functions/v1/wallets")
+        XCTAssertEqual(request.url?.absoluteString, "https://demo.snoozestack.com/functions/v1/wallets")
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "apikey"), "test-anon-key")
         // No session yet, so the api key is the bearer — same default as
@@ -144,7 +144,7 @@ final class ShovelbaseClientTests: XCTestCase {
         do {
             let _: OKResponse = try await client.functions.invoke("charge")
             XCTFail("expected the call to throw")
-        } catch let error as ShovelbaseFunctionsError {
+        } catch let error as SnoozestackFunctionsError {
             guard case let .http(status, message) = error else {
                 return XCTFail("expected an http error, got \(error)")
             }
@@ -161,13 +161,13 @@ final class ShovelbaseClientTests: XCTestCase {
         let request = try XCTUnwrap(StubProtocol.lastRequest)
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://demo.shovelbase.com/functions/v1/wallets?limit=10"
+            "https://demo.snoozestack.com/functions/v1/wallets?limit=10"
         )
     }
 }
 
 /// Session storage that never touches the keychain — tests only.
-final class MemoryIdentityStorage: ShovelbaseIdentityStorage, @unchecked Sendable {
+final class MemoryIdentityStorage: SnoozestackIdentityStorage, @unchecked Sendable {
     private var values: [String: Data] = [:]
     func read(key: String) -> Data? { values[key] }
     func write(key: String, value: Data) { values[key] = value }

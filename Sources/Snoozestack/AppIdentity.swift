@@ -12,7 +12,7 @@
 // resetPasswordForEmail, confirm and invite — a forgotten password is
 // recovered with a magic link, then changePassword.
 //
-// A lock-guarded class rather than an actor — matches ShovelbasePush.swift's
+// A lock-guarded class rather than an actor — matches SnoozestackPush.swift's
 // own shape (NSLock-guarded mutable state) so state (`.state`/`.session`/
 // `.user`) reads synchronously, the same as the JS SDK's getters, rather
 // than needing `await` for a plain property read.
@@ -43,7 +43,7 @@ public enum IdentityState: Sendable, Equatable {
 
 // MARK: - Error taxonomy
 
-public enum ShovelbaseIdentityErrorCode: String, Sendable {
+public enum SnoozestackIdentityErrorCode: String, Sendable {
   case invalidRedirect = "invalid_redirect"
   case invalidContinuation = "invalid_continuation"
   case rateLimited = "rate_limited"
@@ -62,15 +62,15 @@ public enum ShovelbaseIdentityErrorCode: String, Sendable {
   case passwordTooWeak = "password_too_weak"
 }
 
-/// Every throw from ``ShovelbaseIdentity`` is one of these. See
+/// Every throw from ``SnoozestackIdentity`` is one of these. See
 /// ../../../docs/app-identity-client-contract.md's error-taxonomy table for
 /// the full server-response-to-code mapping.
-public struct ShovelbaseIdentityError: Error, LocalizedError, Sendable {
-  public let code: ShovelbaseIdentityErrorCode
+public struct SnoozestackIdentityError: Error, LocalizedError, Sendable {
+  public let code: SnoozestackIdentityErrorCode
   public let status: Int?
   public let message: String
 
-  public init(code: ShovelbaseIdentityErrorCode, status: Int? = nil, message: String) {
+  public init(code: SnoozestackIdentityErrorCode, status: Int? = nil, message: String) {
     self.code = code
     self.status = status
     self.message = message
@@ -125,9 +125,9 @@ public struct OAuthResult: Sendable {
 
 // MARK: - Storage
 
-/// Where ``ShovelbaseIdentity`` persists the current session between
+/// Where ``SnoozestackIdentity`` persists the current session between
 /// launches. Default is ``KeychainIdentityStorage``.
-public protocol ShovelbaseIdentityStorage: Sendable {
+public protocol SnoozestackIdentityStorage: Sendable {
   func read(key: String) -> Data?
   func write(key: String, value: Data)
   func remove(key: String)
@@ -137,10 +137,10 @@ public protocol ShovelbaseIdentityStorage: Sendable {
 /// `kSecAttrAccessibleAfterFirstUnlock`: readable in the background (a
 /// refresh can happen while the app isn't in the foreground), but not
 /// before the device's first unlock after boot.
-public final class KeychainIdentityStorage: ShovelbaseIdentityStorage, @unchecked Sendable {
+public final class KeychainIdentityStorage: SnoozestackIdentityStorage, @unchecked Sendable {
   private let service: String
 
-  public init(service: String = "com.shovelbase.identity") {
+  public init(service: String = "com.snoozestack.identity") {
     self.service = service
   }
 
@@ -180,21 +180,21 @@ public final class KeychainIdentityStorage: ShovelbaseIdentityStorage, @unchecke
 /// Client identity API for a project's own hosted application — magic link,
 /// OAuth, sessions and sign-out.
 ///
-///     let identity = ShovelbaseIdentity(url: projectURL, apiKey: anonKey)
+///     let identity = SnoozestackIdentity(url: projectURL, apiKey: anonKey)
 ///     try await identity.requestMagicLink(email: email, redirectTo: callbackURL)
 ///     // ... user clicks the emailed link, app opens on callbackURL?token=... ...
 ///     let result = try await identity.completeMagicLink(token: token)
-public final class ShovelbaseIdentity: @unchecked Sendable {
+public final class SnoozestackIdentity: @unchecked Sendable {
   public struct Options: Sendable {
     /// "default" (live), "dev", or "preview:<name>" — must match the
     /// namespace `snoozestack auth push` configured redirect_urls/providers
     /// for. Defaults to "default".
     public var namespace: String
-    public var storage: any ShovelbaseIdentityStorage
+    public var storage: any SnoozestackIdentityStorage
     /// Auto-refresh the session shortly before it expires. Defaults to true.
     public var autoRefresh: Bool
 
-    public init(namespace: String = "default", storage: any ShovelbaseIdentityStorage = KeychainIdentityStorage(), autoRefresh: Bool = true) {
+    public init(namespace: String = "default", storage: any SnoozestackIdentityStorage = KeychainIdentityStorage(), autoRefresh: Bool = true) {
       self.namespace = namespace
       self.storage = storage
       self.autoRefresh = autoRefresh
@@ -204,7 +204,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   private let endpoint: URL
   private let apiKey: String
   private let namespace: String
-  private let storage: any ShovelbaseIdentityStorage
+  private let storage: any SnoozestackIdentityStorage
   private let storageKey: String
   private let autoRefresh: Bool
   private let urlSession: URLSession
@@ -231,7 +231,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
     var base = url
     while base.hasSuffix("/") { base.removeLast() }
     guard let endpoint = URL(string: "\(base)/auth") else {
-      preconditionFailure("ShovelbaseIdentity(url:) requires a valid project URL")
+      preconditionFailure("SnoozestackIdentity(url:) requires a valid project URL")
     }
     self.endpoint = endpoint
     self.apiKey = apiKey
@@ -369,7 +369,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   /// There is no reset method by design: reset IS the magic link, then this.
   public func changePassword(currentPassword: String? = nil, newPassword: String) async throws {
     guard let token = withLock({ _session?.sessionToken }) else {
-      throw ShovelbaseIdentityError(code: .notConfigured, message: "No session — sign in before changing the password")
+      throw SnoozestackIdentityError(code: .notConfigured, message: "No session — sign in before changing the password")
     }
     var body: [String: Any] = ["new_password": newPassword, "namespace": namespace]
     if let currentPassword { body["current_password"] = currentPassword }
@@ -384,11 +384,11 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   // something else (401 -> invalidOrExpiredSession), so their errors are
   // re-labeled here at the call site, mirroring the JS SDK exactly.
   private static func rewritePasswordError(_ error: Error) -> Error {
-    guard let e = error as? ShovelbaseIdentityError else { return error }
+    guard let e = error as? SnoozestackIdentityError else { return error }
     if e.status == 401, e.message.lowercased().contains("authentication required") { return e }
-    if e.status == 401 { return ShovelbaseIdentityError(code: .invalidCredentials, status: e.status, message: e.message) }
+    if e.status == 401 { return SnoozestackIdentityError(code: .invalidCredentials, status: e.status, message: e.message) }
     if e.status == 400, e.message.lowercased().contains("password") {
-      return ShovelbaseIdentityError(code: .passwordTooWeak, status: e.status, message: e.message)
+      return SnoozestackIdentityError(code: .passwordTooWeak, status: e.status, message: e.message)
     }
     return e
   }
@@ -444,9 +444,9 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   // dead session), and its 404 is "no such provider configured for this
   // project" (not an expired link). Mirrors the JS SDK exactly.
   private static func rewriteIdTokenError(_ error: Error) -> Error {
-    guard let e = error as? ShovelbaseIdentityError else { return error }
-    if e.status == 401 { return ShovelbaseIdentityError(code: .oauthFailed, status: e.status, message: e.message) }
-    if e.status == 404 { return ShovelbaseIdentityError(code: .notConfigured, status: e.status, message: e.message) }
+    guard let e = error as? SnoozestackIdentityError else { return error }
+    if e.status == 401 { return SnoozestackIdentityError(code: .oauthFailed, status: e.status, message: e.message) }
+    if e.status == 404 { return SnoozestackIdentityError(code: .notConfigured, status: e.status, message: e.message) }
     return e
   }
 
@@ -469,7 +469,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
     components.queryItems = queryItems
     setState(.pending)
     guard let url = components.url else {
-      preconditionFailure("ShovelbaseIdentity.startOAuth produced an invalid URL")
+      preconditionFailure("SnoozestackIdentity.startOAuth produced an invalid URL")
     }
     return url
   }
@@ -480,7 +480,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   /// callback the same way ``completeMagicLink(token:)`` is.
   public func completeOAuthCallback(url: URL) async throws -> OAuthResult {
     guard let fragment = url.fragment, !fragment.isEmpty else {
-      throw ShovelbaseIdentityError(code: .notConfigured, message: "No OAuth callback fragment in the given URL")
+      throw SnoozestackIdentityError(code: .notConfigured, message: "No OAuth callback fragment in the given URL")
     }
     let task: Task<OAuthResult, Error> = withLock {
       if let existing = inFlightOAuth { return existing }
@@ -507,7 +507,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
         let userId = params["user_id"],
         let email = params["email"]
       else {
-        throw ShovelbaseIdentityError(code: .serverError, message: "The OAuth callback fragment was missing the expected fields")
+        throw SnoozestackIdentityError(code: .serverError, message: "The OAuth callback fragment was missing the expected fields")
       }
       let user = IdentityUser(id: userId, email: email)
       applySession(
@@ -528,7 +528,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   @discardableResult
   public func refresh() async throws -> IdentitySession {
     guard let refreshToken = session?.refreshToken else {
-      throw ShovelbaseIdentityError(code: .notConfigured, message: "No session to refresh")
+      throw SnoozestackIdentityError(code: .notConfigured, message: "No session to refresh")
     }
     do {
       let payload: SessionPayload = try await post("/session", body: ["refresh_token": refreshToken, "namespace": namespace])
@@ -538,7 +538,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
       )
       applySession(newSession, user: user)
       return newSession
-    } catch let error as ShovelbaseIdentityError {
+    } catch let error as SnoozestackIdentityError {
       if error.code == .invalidOrExpiredSession {
         clear(state: .expired)
       }
@@ -667,7 +667,7 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
     do {
       (data, response) = try await urlSession.data(for: request)
     } catch {
-      throw ShovelbaseIdentityError(code: .networkError, message: "Network request failed: \(error.localizedDescription)")
+      throw SnoozestackIdentityError(code: .networkError, message: "Network request failed: \(error.localizedDescription)")
     }
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     guard (200..<300).contains(status) else {
@@ -677,28 +677,28 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
     do {
       return try JSONDecoder().decode(Response.self, from: data)
     } catch {
-      throw ShovelbaseIdentityError(code: .serverError, status: status, message: "Unexpected response shape")
+      throw SnoozestackIdentityError(code: .serverError, status: status, message: "Unexpected response shape")
     }
   }
 
-  private static func errorFromResponse(status: Int, message: String) -> ShovelbaseIdentityError {
+  private static func errorFromResponse(status: Int, message: String) -> SnoozestackIdentityError {
     switch status {
     case 429:
-      return ShovelbaseIdentityError(code: .rateLimited, status: status, message: message)
+      return SnoozestackIdentityError(code: .rateLimited, status: status, message: message)
     case 404:
-      return ShovelbaseIdentityError(code: .invalidOrExpiredLink, status: status, message: message)
+      return SnoozestackIdentityError(code: .invalidOrExpiredLink, status: status, message: message)
     case 401:
-      return ShovelbaseIdentityError(code: .invalidOrExpiredSession, status: status, message: message)
+      return SnoozestackIdentityError(code: .invalidOrExpiredSession, status: status, message: message)
     // Checked before invalidRedirect below: a rejected continue_to's message
     // names redirect_urls too (same allowlist, checked by origin instead of
     // exact match) — see isAllowedContinuation's own comment in
     // portal/src/lib/app-identity.ts.
     case 400 where message.lowercased().contains("continuation"):
-      return ShovelbaseIdentityError(code: .invalidContinuation, status: status, message: message)
+      return SnoozestackIdentityError(code: .invalidContinuation, status: status, message: message)
     case 400 where message.lowercased().contains("redirect"):
-      return ShovelbaseIdentityError(code: .invalidRedirect, status: status, message: message)
+      return SnoozestackIdentityError(code: .invalidRedirect, status: status, message: message)
     default:
-      return ShovelbaseIdentityError(code: .serverError, status: status, message: message)
+      return SnoozestackIdentityError(code: .serverError, status: status, message: message)
     }
   }
 
@@ -707,16 +707,16 @@ public final class ShovelbaseIdentity: @unchecked Sendable {
   // "oauth_failed"/"server_error" are ours; anything else is the
   // provider's own `error` query param passed straight through (e.g.
   // "access_denied"), surfaced uniformly as .oauthDenied.
-  private static func errorFromOAuthFragment(_ code: String) -> ShovelbaseIdentityError {
+  private static func errorFromOAuthFragment(_ code: String) -> SnoozestackIdentityError {
     switch code {
     case "missing_code":
-      return ShovelbaseIdentityError(code: .missingCode, message: "The OAuth callback had no authorization code")
+      return SnoozestackIdentityError(code: .missingCode, message: "The OAuth callback had no authorization code")
     case "oauth_failed":
-      return ShovelbaseIdentityError(code: .oauthFailed, message: "The OAuth sign-in failed")
+      return SnoozestackIdentityError(code: .oauthFailed, message: "The OAuth sign-in failed")
     case "server_error":
-      return ShovelbaseIdentityError(code: .serverError, message: "The OAuth sign-in failed (server error)")
+      return SnoozestackIdentityError(code: .serverError, message: "The OAuth sign-in failed (server error)")
     default:
-      return ShovelbaseIdentityError(code: .oauthDenied, message: "The OAuth provider declined the request: \(code)")
+      return SnoozestackIdentityError(code: .oauthDenied, message: "The OAuth provider declined the request: \(code)")
     }
   }
 
