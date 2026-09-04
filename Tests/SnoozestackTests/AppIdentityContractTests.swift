@@ -389,6 +389,37 @@ final class AppIdentityContractTests: XCTestCase {
     XCTAssertNil(identity.user)
   }
 
+  func testDeleteAccountSendsBearerSessionAndClearsLocalStateOnlyOnSuccess() async throws {
+    let verifyBody = ((Contract.route("magicLinkVerify"))["success"] as! [String: Any])["body"] as! [String: Any]
+    var call = 0
+    var deleteRequest: URLRequest?
+    MockURLProtocol.handler = { request in
+      call += 1
+      if call == 1 { return (200, jsonData(verifyBody)) }
+      if call == 2 { return (500, jsonData(["error": "boom"])) }
+      deleteRequest = request
+      return (200, jsonData(["ok": true]))
+    }
+    let identity = makeIdentity()
+    _ = try await identity.completeMagicLink(token: "tok")
+    let token = identity.session!.sessionToken
+
+    // A refused delete keeps the session: nobody is signed out with an
+    // account still standing.
+    do {
+      try await identity.deleteAccount()
+      XCTFail("expected the refused delete to throw")
+    } catch {}
+    XCTAssertEqual(identity.state, .authenticated)
+
+    try await identity.deleteAccount()
+    XCTAssertEqual(deleteRequest?.url?.path.hasSuffix("/auth/delete"), true)
+    XCTAssertEqual(deleteRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer \(token)")
+    XCTAssertEqual(identity.state, .anonymous)
+    XCTAssertNil(identity.session)
+    XCTAssertNil(identity.user)
+  }
+
   func testOnStateChangeFiresImmediatelyAndOnEveryTransition() async throws {
     let verifyBody = ((Contract.route("magicLinkVerify"))["success"] as! [String: Any])["body"] as! [String: Any]
     MockURLProtocol.handler = { _ in (200, jsonData(verifyBody)) }

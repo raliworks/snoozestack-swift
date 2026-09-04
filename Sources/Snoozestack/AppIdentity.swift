@@ -575,6 +575,20 @@ public final class SnoozestackIdentity: @unchecked Sendable {
     clear(state: .anonymous)
   }
 
+  /// Deletes the signed-in user's account on the identity plane — the user
+  /// row and every session and linked provider with it — then clears local
+  /// state. The app's own data about the user is the app's to remove first;
+  /// the identity plane knows nothing about it. Throws (and keeps the
+  /// session) if the server refuses, so a failed delete never leaves the
+  /// person silently signed out with an account still standing.
+  public func deleteAccount() async throws {
+    guard let token = withLock({ _session?.sessionToken }) else {
+      throw SnoozestackIdentityError(code: .notConfigured, message: "No session — sign in before deleting the account")
+    }
+    let _: OkBody = try await post("/delete", body: ["namespace": namespace], headers: ["Authorization": "Bearer \(token)"])
+    clear(state: .anonymous)
+  }
+
   // MARK: - Internals
 
   /// Every hold of `lock` routes through here (a plain synchronous
