@@ -28,22 +28,21 @@ Library products:
 
 ## Install
 
-The package is served as a git repo from `snoozestack.com` — it is **not** on
-GitHub or any package index. In Xcode: **File → Add Package Dependencies…**,
-paste
+The package lives at [github.com/raliworks/snoozestack-swift](https://github.com/raliworks/snoozestack-swift).
+In Xcode: **File → Add Package Dependencies…**, paste
 
 ```
-https://snoozestack.com/swift/snoozestack-swift.git
+https://github.com/raliworks/snoozestack-swift.git
 ```
 
-choose **Up to Next Major Version** from `0.2.0`, and add the `Snoozestack`
-library to your app target. Or in a `Package.swift`:
+choose **Up to Next Major Version**, and add the `Snoozestack` library to
+your app target. Or in a `Package.swift`:
 
 ```swift
 dependencies: [
     .package(
-        url: "https://snoozestack.com/swift/snoozestack-swift.git",
-        from: "0.2.0"
+        url: "https://github.com/raliworks/snoozestack-swift.git",
+        from: "1.0.0"
     ),
 ],
 targets: [
@@ -53,10 +52,15 @@ targets: [
 ]
 ```
 
-To release a new version: bump `VERSION`, run `../scripts/publish-sdks.sh
-swift` (it commits the current `sdk-swift/` content to the hosted repo and
-tags it — published versions are immutable), then update the dependency in
-Xcode (*File → Packages → Update to Latest Package Versions*).
+The same history is also served from
+`https://snoozestack.com/swift/snoozestack-swift.git` (git's dumb-HTTP
+protocol, which SwiftPM on the command line can fetch but Xcode's Add Package
+sheet cannot) — projects that already depend on that URL keep working.
+
+To release a new version: push to master (`scripts/publish-sdks.sh swift`
+commits the current `sdk-swift/` content to the hosted repo, tags it, and
+pushes the tag to GitHub — published versions are immutable), then update the
+dependency in Xcode (*File → Packages → Update to Latest Package Versions*).
 
 ## Use
 
