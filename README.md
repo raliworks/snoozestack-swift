@@ -20,11 +20,11 @@ versions, so nothing already shipped changes under you.
 
 Library products:
 
-- **`Snoozestack`** — the full client (`Snoozestack.createClient`, `.identity`,
+- **`SnoozeStack`** — the full client (`SnoozeStack.createClient`, `.identity`,
   `.functions`, `.signals`, `.push`).
-- **`SnoozestackSignals`** — event tracking only; a single file, if you don't
-  need the rest. (`SnoozestackAnalytics` remains as a deprecated alias product.)
-- **`SnoozestackPush`** — push notification registration only.
+- **`SnoozeStackSignals`** — event tracking only; a single file, if you don't
+  need the rest. (`SnoozeStackAnalytics` remains as a deprecated alias product.)
+- **`SnoozeStackPush`** — push notification registration only.
 
 ## Install
 
@@ -35,7 +35,7 @@ In Xcode: **File → Add Package Dependencies…**, paste
 https://github.com/raliworks/snoozestack-swift.git
 ```
 
-choose **Up to Next Major Version**, and add the `Snoozestack` library to
+choose **Up to Next Major Version**, and add the `SnoozeStack` library to
 your app target. Or in a `Package.swift`:
 
 ```swift
@@ -47,7 +47,7 @@ dependencies: [
 ],
 targets: [
     .target(name: "MyApp", dependencies: [
-        .product(name: "Snoozestack", package: "snoozestack-swift"),
+        .product(name: "SnoozeStack", package: "snoozestack-swift"),
     ]),
 ]
 ```
@@ -65,11 +65,11 @@ dependency in Xcode (*File → Packages → Update to Latest Package Versions*).
 ## Use
 
 ```swift
-import Snoozestack
+import SnoozeStack
 
 // Once, at launch (e.g. in your App init).
 // URL + anon key: portal → Project Settings → API.
-let snoozestack = Snoozestack.createClient(
+let snoozestack = SnoozeStack.createClient(
     url: "https://<project-ref>.snoozestack.com",   // SNOOZESTACK_URL
     key: "<SNOOZESTACK_ANON_KEY>"
 )
@@ -87,7 +87,7 @@ snoozestack.signals.track("signup", properties: ["plan": "pro"])
 snoozestack.signals.reset()                        // on sign-out
 ```
 
-Supporting types come from the same `import Snoozestack`. Not supported:
+Supporting types come from the same `import SnoozeStack`. Not supported:
 realtime subscriptions.
 
 ### Application identity (magic link, password, OAuth, sessions)
@@ -155,14 +155,14 @@ call is rejected — see `../docs/app-identity-client-contract.md`.
 - Events are persisted to disk, so they survive app kills.
 - Batches flush every 10 s, at 20 queued events, and when the app is
   backgrounded (tunable via the `signals:` parameter of `createClient`,
-  or `SnoozestackSignals.Options` standalone).
+  or `SnoozeStackSignals.Options` standalone).
 - Each event carries an `insert_id`, so a batch retried after a network
   timeout is never double-counted.
 - Default properties sent with every event: `$os`, `$os_version`,
   `$app_version`, `$sdk`.
 - Property values must be JSON-encodable; anything else is stringified.
 
-Using signals without the client: add the `SnoozestackSignals` product
-instead and call `SnoozestackSignals.configure(url:apiKey:)` at launch.
-(`snoozestack.analytics` and the `SnoozestackAnalytics` product remain as
+Using signals without the client: add the `SnoozeStackSignals` product
+instead and call `SnoozeStackSignals.configure(url:apiKey:)` at launch.
+(`snoozestack.analytics` and the `SnoozeStackAnalytics` product remain as
 deprecated aliases.)

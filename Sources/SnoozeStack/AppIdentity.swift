@@ -12,7 +12,7 @@
 // resetPasswordForEmail, confirm and invite — a forgotten password is
 // recovered with a magic link, then changePassword.
 //
-// A lock-guarded class rather than an actor — matches SnoozestackPush.swift's
+// A lock-guarded class rather than an actor — matches SnoozeStackPush.swift's
 // own shape (NSLock-guarded mutable state) so state (`.state`/`.session`/
 // `.user`) reads synchronously, the same as the JS SDK's getters, rather
 // than needing `await` for a plain property read.
@@ -43,7 +43,7 @@ public enum IdentityState: Sendable, Equatable {
 
 // MARK: - Error taxonomy
 
-public enum SnoozestackIdentityErrorCode: String, Sendable {
+public enum SnoozeStackIdentityErrorCode: String, Sendable {
   case invalidRedirect = "invalid_redirect"
   case invalidContinuation = "invalid_continuation"
   case rateLimited = "rate_limited"
@@ -62,15 +62,15 @@ public enum SnoozestackIdentityErrorCode: String, Sendable {
   case passwordTooWeak = "password_too_weak"
 }
 
-/// Every throw from ``SnoozestackIdentity`` is one of these. See
+/// Every throw from ``SnoozeStackIdentity`` is one of these. See
 /// ../../../docs/app-identity-client-contract.md's error-taxonomy table for
 /// the full server-response-to-code mapping.
-public struct SnoozestackIdentityError: Error, LocalizedError, Sendable {
-  public let code: SnoozestackIdentityErrorCode
+public struct SnoozeStackIdentityError: Error, LocalizedError, Sendable {
+  public let code: SnoozeStackIdentityErrorCode
   public let status: Int?
   public let message: String
 
-  public init(code: SnoozestackIdentityErrorCode, status: Int? = nil, message: String) {
+  public init(code: SnoozeStackIdentityErrorCode, status: Int? = nil, message: String) {
     self.code = code
     self.status = status
     self.message = message
@@ -125,9 +125,9 @@ public struct OAuthResult: Sendable {
 
 // MARK: - Storage
 
-/// Where ``SnoozestackIdentity`` persists the current session between
+/// Where ``SnoozeStackIdentity`` persists the current session between
 /// launches. Default is ``KeychainIdentityStorage``.
-public protocol SnoozestackIdentityStorage: Sendable {
+public protocol SnoozeStackIdentityStorage: Sendable {
   func read(key: String) -> Data?
   func write(key: String, value: Data)
   func remove(key: String)
@@ -137,7 +137,7 @@ public protocol SnoozestackIdentityStorage: Sendable {
 /// `kSecAttrAccessibleAfterFirstUnlock`: readable in the background (a
 /// refresh can happen while the app isn't in the foreground), but not
 /// before the device's first unlock after boot.
-public final class KeychainIdentityStorage: SnoozestackIdentityStorage, @unchecked Sendable {
+public final class KeychainIdentityStorage: SnoozeStackIdentityStorage, @unchecked Sendable {
   private let service: String
 
   public init(service: String = "com.snoozestack.identity") {
@@ -180,21 +180,21 @@ public final class KeychainIdentityStorage: SnoozestackIdentityStorage, @uncheck
 /// Client identity API for a project's own hosted application — magic link,
 /// OAuth, sessions and sign-out.
 ///
-///     let identity = SnoozestackIdentity(url: projectURL, apiKey: anonKey)
+///     let identity = SnoozeStackIdentity(url: projectURL, apiKey: anonKey)
 ///     try await identity.requestMagicLink(email: email, redirectTo: callbackURL)
 ///     // ... user clicks the emailed link, app opens on callbackURL?token=... ...
 ///     let result = try await identity.completeMagicLink(token: token)
-public final class SnoozestackIdentity: @unchecked Sendable {
+public final class SnoozeStackIdentity: @unchecked Sendable {
   public struct Options: Sendable {
     /// "default" (live), "dev", or "preview:<name>" — must match the
     /// namespace `snoozestack auth push` configured redirect_urls/providers
     /// for. Defaults to "default".
     public var namespace: String
-    public var storage: any SnoozestackIdentityStorage
+    public var storage: any SnoozeStackIdentityStorage
     /// Auto-refresh the session shortly before it expires. Defaults to true.
     public var autoRefresh: Bool
 
-    public init(namespace: String = "default", storage: any SnoozestackIdentityStorage = KeychainIdentityStorage(), autoRefresh: Bool = true) {
+    public init(namespace: String = "default", storage: any SnoozeStackIdentityStorage = KeychainIdentityStorage(), autoRefresh: Bool = true) {
       self.namespace = namespace
       self.storage = storage
       self.autoRefresh = autoRefresh
@@ -204,7 +204,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   private let endpoint: URL
   private let apiKey: String
   private let namespace: String
-  private let storage: any SnoozestackIdentityStorage
+  private let storage: any SnoozeStackIdentityStorage
   private let storageKey: String
   private let autoRefresh: Bool
   private let urlSession: URLSession
@@ -231,7 +231,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
     var base = url
     while base.hasSuffix("/") { base.removeLast() }
     guard let endpoint = URL(string: "\(base)/auth") else {
-      preconditionFailure("SnoozestackIdentity(url:) requires a valid project URL")
+      preconditionFailure("SnoozeStackIdentity(url:) requires a valid project URL")
     }
     self.endpoint = endpoint
     self.apiKey = apiKey
@@ -369,7 +369,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   /// There is no reset method by design: reset IS the magic link, then this.
   public func changePassword(currentPassword: String? = nil, newPassword: String) async throws {
     guard let token = withLock({ _session?.sessionToken }) else {
-      throw SnoozestackIdentityError(code: .notConfigured, message: "No session — sign in before changing the password")
+      throw SnoozeStackIdentityError(code: .notConfigured, message: "No session — sign in before changing the password")
     }
     var body: [String: Any] = ["new_password": newPassword, "namespace": namespace]
     if let currentPassword { body["current_password"] = currentPassword }
@@ -384,11 +384,11 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   // something else (401 -> invalidOrExpiredSession), so their errors are
   // re-labeled here at the call site, mirroring the JS SDK exactly.
   private static func rewritePasswordError(_ error: Error) -> Error {
-    guard let e = error as? SnoozestackIdentityError else { return error }
+    guard let e = error as? SnoozeStackIdentityError else { return error }
     if e.status == 401, e.message.lowercased().contains("authentication required") { return e }
-    if e.status == 401 { return SnoozestackIdentityError(code: .invalidCredentials, status: e.status, message: e.message) }
+    if e.status == 401 { return SnoozeStackIdentityError(code: .invalidCredentials, status: e.status, message: e.message) }
     if e.status == 400, e.message.lowercased().contains("password") {
-      return SnoozestackIdentityError(code: .passwordTooWeak, status: e.status, message: e.message)
+      return SnoozeStackIdentityError(code: .passwordTooWeak, status: e.status, message: e.message)
     }
     return e
   }
@@ -444,9 +444,9 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   // dead session), and its 404 is "no such provider configured for this
   // project" (not an expired link). Mirrors the JS SDK exactly.
   private static func rewriteIdTokenError(_ error: Error) -> Error {
-    guard let e = error as? SnoozestackIdentityError else { return error }
-    if e.status == 401 { return SnoozestackIdentityError(code: .oauthFailed, status: e.status, message: e.message) }
-    if e.status == 404 { return SnoozestackIdentityError(code: .notConfigured, status: e.status, message: e.message) }
+    guard let e = error as? SnoozeStackIdentityError else { return error }
+    if e.status == 401 { return SnoozeStackIdentityError(code: .oauthFailed, status: e.status, message: e.message) }
+    if e.status == 404 { return SnoozeStackIdentityError(code: .notConfigured, status: e.status, message: e.message) }
     return e
   }
 
@@ -469,7 +469,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
     components.queryItems = queryItems
     setState(.pending)
     guard let url = components.url else {
-      preconditionFailure("SnoozestackIdentity.startOAuth produced an invalid URL")
+      preconditionFailure("SnoozeStackIdentity.startOAuth produced an invalid URL")
     }
     return url
   }
@@ -480,7 +480,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   /// callback the same way ``completeMagicLink(token:)`` is.
   public func completeOAuthCallback(url: URL) async throws -> OAuthResult {
     guard let fragment = url.fragment, !fragment.isEmpty else {
-      throw SnoozestackIdentityError(code: .notConfigured, message: "No OAuth callback fragment in the given URL")
+      throw SnoozeStackIdentityError(code: .notConfigured, message: "No OAuth callback fragment in the given URL")
     }
     let task: Task<OAuthResult, Error> = withLock {
       if let existing = inFlightOAuth { return existing }
@@ -507,7 +507,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
         let userId = params["user_id"],
         let email = params["email"]
       else {
-        throw SnoozestackIdentityError(code: .serverError, message: "The OAuth callback fragment was missing the expected fields")
+        throw SnoozeStackIdentityError(code: .serverError, message: "The OAuth callback fragment was missing the expected fields")
       }
       let user = IdentityUser(id: userId, email: email)
       applySession(
@@ -528,7 +528,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   @discardableResult
   public func refresh() async throws -> IdentitySession {
     guard let refreshToken = session?.refreshToken else {
-      throw SnoozestackIdentityError(code: .notConfigured, message: "No session to refresh")
+      throw SnoozeStackIdentityError(code: .notConfigured, message: "No session to refresh")
     }
     do {
       let payload: SessionPayload = try await post("/session", body: ["refresh_token": refreshToken, "namespace": namespace])
@@ -538,7 +538,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
       )
       applySession(newSession, user: user)
       return newSession
-    } catch let error as SnoozestackIdentityError {
+    } catch let error as SnoozeStackIdentityError {
       if error.code == .invalidOrExpiredSession {
         clear(state: .expired)
       }
@@ -583,7 +583,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   /// person silently signed out with an account still standing.
   public func deleteAccount() async throws {
     guard let token = withLock({ _session?.sessionToken }) else {
-      throw SnoozestackIdentityError(code: .notConfigured, message: "No session — sign in before deleting the account")
+      throw SnoozeStackIdentityError(code: .notConfigured, message: "No session — sign in before deleting the account")
     }
     let _: OkBody = try await post("/delete", body: ["namespace": namespace], headers: ["Authorization": "Bearer \(token)"])
     clear(state: .anonymous)
@@ -681,7 +681,7 @@ public final class SnoozestackIdentity: @unchecked Sendable {
     do {
       (data, response) = try await urlSession.data(for: request)
     } catch {
-      throw SnoozestackIdentityError(code: .networkError, message: "Network request failed: \(error.localizedDescription)")
+      throw SnoozeStackIdentityError(code: .networkError, message: "Network request failed: \(error.localizedDescription)")
     }
     let status = (response as? HTTPURLResponse)?.statusCode ?? 0
     guard (200..<300).contains(status) else {
@@ -691,28 +691,28 @@ public final class SnoozestackIdentity: @unchecked Sendable {
     do {
       return try JSONDecoder().decode(Response.self, from: data)
     } catch {
-      throw SnoozestackIdentityError(code: .serverError, status: status, message: "Unexpected response shape")
+      throw SnoozeStackIdentityError(code: .serverError, status: status, message: "Unexpected response shape")
     }
   }
 
-  private static func errorFromResponse(status: Int, message: String) -> SnoozestackIdentityError {
+  private static func errorFromResponse(status: Int, message: String) -> SnoozeStackIdentityError {
     switch status {
     case 429:
-      return SnoozestackIdentityError(code: .rateLimited, status: status, message: message)
+      return SnoozeStackIdentityError(code: .rateLimited, status: status, message: message)
     case 404:
-      return SnoozestackIdentityError(code: .invalidOrExpiredLink, status: status, message: message)
+      return SnoozeStackIdentityError(code: .invalidOrExpiredLink, status: status, message: message)
     case 401:
-      return SnoozestackIdentityError(code: .invalidOrExpiredSession, status: status, message: message)
+      return SnoozeStackIdentityError(code: .invalidOrExpiredSession, status: status, message: message)
     // Checked before invalidRedirect below: a rejected continue_to's message
     // names redirect_urls too (same allowlist, checked by origin instead of
     // exact match) — see isAllowedContinuation's own comment in
     // portal/src/lib/app-identity.ts.
     case 400 where message.lowercased().contains("continuation"):
-      return SnoozestackIdentityError(code: .invalidContinuation, status: status, message: message)
+      return SnoozeStackIdentityError(code: .invalidContinuation, status: status, message: message)
     case 400 where message.lowercased().contains("redirect"):
-      return SnoozestackIdentityError(code: .invalidRedirect, status: status, message: message)
+      return SnoozeStackIdentityError(code: .invalidRedirect, status: status, message: message)
     default:
-      return SnoozestackIdentityError(code: .serverError, status: status, message: message)
+      return SnoozeStackIdentityError(code: .serverError, status: status, message: message)
     }
   }
 
@@ -721,16 +721,16 @@ public final class SnoozestackIdentity: @unchecked Sendable {
   // "oauth_failed"/"server_error" are ours; anything else is the
   // provider's own `error` query param passed straight through (e.g.
   // "access_denied"), surfaced uniformly as .oauthDenied.
-  private static func errorFromOAuthFragment(_ code: String) -> SnoozestackIdentityError {
+  private static func errorFromOAuthFragment(_ code: String) -> SnoozeStackIdentityError {
     switch code {
     case "missing_code":
-      return SnoozestackIdentityError(code: .missingCode, message: "The OAuth callback had no authorization code")
+      return SnoozeStackIdentityError(code: .missingCode, message: "The OAuth callback had no authorization code")
     case "oauth_failed":
-      return SnoozestackIdentityError(code: .oauthFailed, message: "The OAuth sign-in failed")
+      return SnoozeStackIdentityError(code: .oauthFailed, message: "The OAuth sign-in failed")
     case "server_error":
-      return SnoozestackIdentityError(code: .serverError, message: "The OAuth sign-in failed (server error)")
+      return SnoozeStackIdentityError(code: .serverError, message: "The OAuth sign-in failed (server error)")
     default:
-      return SnoozestackIdentityError(code: .oauthDenied, message: "The OAuth provider declined the request: \(code)")
+      return SnoozeStackIdentityError(code: .oauthDenied, message: "The OAuth provider declined the request: \(code)")
     }
   }
 

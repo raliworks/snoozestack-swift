@@ -1,8 +1,8 @@
-// Snoozestack — Swift client for snoozestack projects.
+// SnoozeStack — Swift client for snoozestack projects.
 //
-//     import Snoozestack
+//     import SnoozeStack
 //
-//     let snoozestack = Snoozestack.createClient(
+//     let snoozestack = SnoozeStack.createClient(
 //         url: "https://<project-ref>.snoozestack.com",   // SNOOZESTACK_URL from the portal
 //         key: "<SNOOZESTACK_ANON_KEY>"
 //     )
@@ -31,63 +31,63 @@
 // These are gone, not deprecated: the package majored to 1.0 to say so, and
 // SPM consumers pin versions, so nothing already shipped changes under them.
 import Foundation
-@_exported import SnoozestackSignals
-@_exported import SnoozestackPush
+@_exported import SnoozeStackSignals
+@_exported import SnoozeStackPush
 
-/// The snoozestack client. Created by ``Snoozestack/createClient(url:key:signals:identity:)``.
-public final class SnoozestackClient: Sendable {
+/// The snoozestack client. Created by ``SnoozeStack/createClient(url:key:signals:identity:)``.
+public final class SnoozeStackClient: Sendable {
     /// The resolved project base every service path is built from.
     public let url: String
 
     /// Magic link, password, OAuth, sessions and sign-out for this project's
     /// own hosted application (#101). See AppIdentity.swift.
-    public let identity: SnoozestackIdentity
+    public let identity: SnoozeStackIdentity
 
     /// Calling this project's functions. A call carries `identity`'s current
     /// session automatically — see FunctionsClient.swift.
-    public let functions: SnoozestackFunctionsClient
+    public let functions: SnoozeStackFunctionsClient
 
-    init(url: String, identity: SnoozestackIdentity, functions: SnoozestackFunctionsClient) {
+    init(url: String, identity: SnoozeStackIdentity, functions: SnoozeStackFunctionsClient) {
         self.url = url
         self.identity = identity
         self.functions = functions
     }
 }
 
-public enum Snoozestack {
+public enum SnoozeStack {
 
     /// Creates a snoozestack client. `url` is your project URL
     /// (`https://<ref>.snoozestack.com`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
-    /// Also configures `SnoozestackSignals.shared` and `SnoozestackPush.shared`
+    /// Also configures `SnoozeStackSignals.shared` and `SnoozeStackPush.shared`
     /// against the same project, so `client.signals.track(…)` and
     /// `client.push.register(…)` work immediately. `signals` tunes event
     /// batching (flush interval, batch size); `identity` tunes the
     /// application-identity client (namespace, session storage,
-    /// auto-refresh — see `SnoozestackIdentity.Options`).
+    /// auto-refresh — see `SnoozeStackIdentity.Options`).
     public static func createClient(
         url: String,
         key: String,
-        signals signalsOptions: SnoozestackSignals.Options = .init(),
-        identity identityOptions: SnoozestackIdentity.Options = .init()
-    ) -> SnoozestackClient {
+        signals signalsOptions: SnoozeStackSignals.Options = .init(),
+        identity identityOptions: SnoozeStackIdentity.Options = .init()
+    ) -> SnoozeStackClient {
         var base = url
         while base.hasSuffix("/") { base.removeLast() }
         guard !base.isEmpty, !key.isEmpty, URL(string: base) != nil else {
-            preconditionFailure("Snoozestack.createClient(url:key:) requires the project URL and an API key")
+            preconditionFailure("SnoozeStack.createClient(url:key:) requires the project URL and an API key")
         }
-        SnoozestackSignals.configure(url: base, apiKey: key, options: signalsOptions)
-        SnoozestackPush.configure(url: base, apiKey: key)
+        SnoozeStackSignals.configure(url: base, apiKey: key, options: signalsOptions)
+        SnoozeStackPush.configure(url: base, apiKey: key)
 
-        let identity = SnoozestackIdentity(url: base, apiKey: key, options: identityOptions)
-        let functions = SnoozestackFunctionsClient(url: base, key: key, identity: identity)
-        let client = SnoozestackClient(url: base, identity: identity, functions: functions)
+        let identity = SnoozeStackIdentity(url: base, apiKey: key, options: identityOptions)
+        let functions = SnoozeStackFunctionsClient(url: base, key: key, identity: identity)
+        let client = SnoozeStackClient(url: base, identity: identity, functions: functions)
 
         // Lets push.register() attach the current session token, so the server
         // can bind the device to the signed-in user. Weak: the shared push
         // object outlives any one client and must not keep it alive.
-        SnoozestackPush.shared.accessTokenProvider = { [weak client] in
+        SnoozeStackPush.shared.accessTokenProvider = { [weak client] in
             guard let client else { return nil }
             try? await client.identity.ensureFreshSession()
             return client.identity.session?.sessionToken
@@ -96,21 +96,17 @@ public enum Snoozestack {
     }
 }
 
-extension SnoozestackClient {
+extension SnoozeStackClient {
     /// Mixpanel-style event tracking (Signals), charted on the portal's Signals
-    /// page. Alias for `SnoozestackSignals.shared` (configured by
-    /// `Snoozestack.createClient`).
-    public var signals: SnoozestackSignals { SnoozestackSignals.shared }
+    /// page. Alias for `SnoozeStackSignals.shared` (configured by
+    /// `SnoozeStack.createClient`).
+    public var signals: SnoozeStackSignals { SnoozeStackSignals.shared }
 
-    /// Deprecated alias of ``signals``.
-    @available(*, deprecated, renamed: "signals")
-    public var analytics: SnoozestackSignals { SnoozestackSignals.shared }
-
-    /// Push notification registration. Alias for `SnoozestackPush.shared`
-    /// (configured by `Snoozestack.createClient`, including the token provider
+    /// Push notification registration. Alias for `SnoozeStackPush.shared`
+    /// (configured by `SnoozeStack.createClient`, including the token provider
     /// that binds a device to the signed-in user).
     ///
     /// There is no send method: pushes are sent server-side, off a queue
     /// trigger, because a client that could enqueue one could notify anybody.
-    public var push: SnoozestackPush { SnoozestackPush.shared }
+    public var push: SnoozeStackPush { SnoozeStackPush.shared }
 }

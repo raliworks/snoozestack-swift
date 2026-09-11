@@ -1,18 +1,15 @@
-// SnoozestackSignals — Mixpanel-style event tracking for snoozestack projects.
+// SnoozeStackSignals — Mixpanel-style event tracking for snoozestack projects.
 //
 // Events are queued (and persisted to disk, so they survive app kills),
 // batched, and POSTed to `<SNOOZESTACK_URL>/signals/v1/events`, where the
 // portal charts them on the Signals page.
 //
-//     SnoozestackSignals.configure(
+//     SnoozeStackSignals.configure(
 //         url: "http://<host>/sb/<project-ref>",   // SNOOZESTACK_URL
 //         apiKey: "<anon key>"
 //     )
-//     SnoozestackSignals.shared.identify(user.id)
-//     SnoozestackSignals.shared.track("signup", properties: ["plan": "pro"])
-//
-// `SnoozestackAnalytics` remains as a deprecated alias (see the bottom of this
-// file, and the SnoozestackAnalytics compat target).
+//     SnoozeStackSignals.shared.identify(user.id)
+//     SnoozeStackSignals.shared.track("signup", properties: ["plan": "pro"])
 //
 // Tracking never throws and never blocks the caller; all work happens on a
 // private serial queue. Failed batches are retried on the next flush.
@@ -21,7 +18,7 @@ import Foundation
 import UIKit
 #endif
 
-public final class SnoozestackSignals {
+public final class SnoozeStackSignals {
 
     public struct Options {
         /// How often the queue is flushed to the server. Default 10 s.
@@ -34,7 +31,7 @@ public final class SnoozestackSignals {
         public init() {}
     }
 
-    public static let shared = SnoozestackSignals()
+    public static let shared = SnoozeStackSignals()
 
     /// Call once, early (e.g. in `application(_:didFinishLaunching…)`).
     /// `url` is the project URL (`http://<host>/sb/<ref>`), `apiKey` the anon key.
@@ -362,8 +359,3 @@ public final class SnoozestackSignals {
         }
     }
 }
-
-/// Renamed to ``SnoozestackSignals``; kept as an alias so existing call sites
-/// (`SnoozestackAnalytics.configure`, `SnoozestackAnalytics.shared`) keep working.
-@available(*, deprecated, renamed: "SnoozestackSignals")
-public typealias SnoozestackAnalytics = SnoozestackSignals

@@ -1,4 +1,4 @@
-// Tests for SnoozestackIdentity (#101) against the shared identity-client
+// Tests for SnoozeStackIdentity (#101) against the shared identity-client
 // contract fixture (../../../sdk/test/app-identity-contract.json — see
 // ../../../docs/app-identity-client-contract.md for the prose version).
 // sdk/src/app-identity.test.mjs asserts against the same fixture on the JS
@@ -6,7 +6,7 @@
 // other's.
 import Foundation
 import XCTest
-@testable import Snoozestack
+@testable import SnoozeStack
 
 private let BASE = "https://demo.snoozestack.com"
 private let KEY = "test-anon-key"
@@ -16,7 +16,7 @@ private let KEY = "test-anon-key"
 private enum Contract {
   static let root: [String: Any] = {
     let fixtureURL = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()  // .../Tests/SnoozestackTests
+      .deletingLastPathComponent()  // .../Tests/SnoozeStackTests
       .deletingLastPathComponent()  // .../Tests
       .deletingLastPathComponent()  // package root (sdk-swift/)
       .deletingLastPathComponent()  // repo root
@@ -59,7 +59,7 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
   override func stopLoading() {}
 }
 
-final class InMemoryIdentityStorage: SnoozestackIdentityStorage, @unchecked Sendable {
+final class InMemoryIdentityStorage: SnoozeStackIdentityStorage, @unchecked Sendable {
   private let lock = NSLock()
   private var store: [String: Data] = [:]
 
@@ -111,8 +111,8 @@ extension URLRequest {
   }
 }
 
-private func makeIdentity(namespace: String = "default", storage: any SnoozestackIdentityStorage = InMemoryIdentityStorage()) -> SnoozestackIdentity {
-  SnoozestackIdentity(
+private func makeIdentity(namespace: String = "default", storage: any SnoozeStackIdentityStorage = InMemoryIdentityStorage()) -> SnoozeStackIdentity {
+  SnoozeStackIdentity(
     url: BASE, apiKey: KEY,
     options: .init(namespace: namespace, storage: storage, autoRefresh: false),
     urlSession: mockSession()
@@ -166,7 +166,7 @@ final class AppIdentityContractTests: XCTestCase {
       do {
         try await identity.requestMagicLink(email: "x@example.com", redirectTo: "https://app.example.com/callback")
         XCTFail("expected \(expectedCode) to be thrown")
-      } catch let error as SnoozestackIdentityError {
+      } catch let error as SnoozeStackIdentityError {
         XCTAssertEqual(error.code.rawValue, expectedCode)
         XCTAssertEqual(error.status, status)
       }
@@ -195,7 +195,7 @@ final class AppIdentityContractTests: XCTestCase {
     do {
       _ = try await identity.completeMagicLink(token: "used-already")
       XCTFail("expected an error")
-    } catch let error as SnoozestackIdentityError {
+    } catch let error as SnoozeStackIdentityError {
       XCTAssertEqual(error.code, .invalidOrExpiredLink)
     }
     XCTAssertEqual(identity.state, .anonymous)
@@ -258,7 +258,7 @@ final class AppIdentityContractTests: XCTestCase {
         continueTo: "https://evil.example.com/x"
       )
       XCTFail("expected invalid_continuation to be thrown")
-    } catch let error as SnoozestackIdentityError {
+    } catch let error as SnoozeStackIdentityError {
       XCTAssertEqual(error.code, .invalidContinuation)
     }
   }
@@ -324,7 +324,7 @@ final class AppIdentityContractTests: XCTestCase {
       do {
         _ = try await identity.completeOAuthCallback(url: URL(string: "https://app.example.com/callback#\(fragment)")!)
         XCTFail("expected \(expectedCode) to be thrown")
-      } catch let error as SnoozestackIdentityError {
+      } catch let error as SnoozeStackIdentityError {
         XCTAssertEqual(error.code.rawValue, expectedCode)
       }
       XCTAssertEqual(identity.state, .anonymous)
@@ -365,7 +365,7 @@ final class AppIdentityContractTests: XCTestCase {
     do {
       _ = try await identity.refresh()
       XCTFail("expected an error")
-    } catch let error as SnoozestackIdentityError {
+    } catch let error as SnoozeStackIdentityError {
       XCTAssertEqual(error.code, .invalidOrExpiredSession)
     }
     XCTAssertEqual(identity.state, .expired)
@@ -494,7 +494,7 @@ final class AppIdentityContractTests: XCTestCase {
       do {
         _ = try await identity.signInWithIdToken(provider: "apple", idToken: "bad")
         XCTFail("expected an error for status \(status)")
-      } catch let error as SnoozestackIdentityError {
+      } catch let error as SnoozeStackIdentityError {
         XCTAssertEqual(error.code.rawValue, expected["code"] as! String)
       }
       XCTAssertEqual(identity.state, .anonymous)

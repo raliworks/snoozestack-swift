@@ -1,4 +1,4 @@
-// SnoozestackPush — registers a device for push notifications with a snoozestack
+// SnoozeStackPush — registers a device for push notifications with a snoozestack
 // project.
 //
 //     func application(_ app: UIApplication,
@@ -19,7 +19,7 @@
 // system prompt appears, and that is the app's call, not the SDK's.
 import Foundation
 
-public final class SnoozestackPush {
+public final class SnoozeStackPush {
 
     /// Which APNs world a build belongs to. Decided when the app is *built*,
     /// not at send time — a token from an Xcode build is only valid against
@@ -38,7 +38,7 @@ public final class SnoozestackPush {
         public var errorDescription: String? {
             switch self {
             case .notConfigured:
-                return "SnoozestackPush.configure(url:apiKey:) has not been called"
+                return "SnoozeStackPush.configure(url:apiKey:) has not been called"
             case .simulatorUnsupported:
                 return "The simulator cannot receive APNs pushes (use `xcrun simctl push` instead)"
             case let .server(status, message):
@@ -47,15 +47,15 @@ public final class SnoozestackPush {
         }
     }
 
-    public static let shared = SnoozestackPush()
+    public static let shared = SnoozeStackPush()
 
-    /// Call once, early — `Snoozestack.createClient` does it for you.
+    /// Call once, early — `SnoozeStack.createClient` does it for you.
     public static func configure(url: String, apiKey: String) {
         shared.configure(url: url, apiKey: apiKey)
     }
 
     /// Supplies the signed-in user's access token, so the server can bind the
-    /// device to `auth.users.id`. `Snoozestack.createClient` wires this to the
+    /// device to `auth.users.id`. `SnoozeStack.createClient` wires this to the
     /// auth client; standalone users may set it themselves. Returning nil
     /// registers the device unattached, and the next launch binds it.
     public var accessTokenProvider: (@Sendable () async -> String?)?

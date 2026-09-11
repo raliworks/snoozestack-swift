@@ -1,7 +1,7 @@
 // The client's own wiring, and the wire contract of functions.invoke().
 //
 // This file used to prove that `.from()`/`.schema()`/`.rpc()` were compile
-// errors on SnoozestackClient — a guard that mattered while the type wrapped
+// errors on SnoozeStackClient — a guard that mattered while the type wrapped
 // the upstream client and could re-inherit those names on a dependency bump
 // (#151). 1.0 dropped the dependency (#209), so there is nothing left to
 // inherit from and nothing to guard against; what is worth pinning now is
@@ -12,7 +12,7 @@
 // publishes, on push to master) — `swift test` from sdk-swift/ is the bar.
 import Foundation
 import XCTest
-@testable import Snoozestack
+@testable import SnoozeStack
 
 /// Captures the request a call makes and answers with a canned response,
 /// without a network.
@@ -66,7 +66,7 @@ final class StubProtocol: URLProtocol {
 
 private struct OKResponse: Decodable { let ok: Bool }
 
-final class SnoozestackClientTests: XCTestCase {
+final class SnoozeStackClientTests: XCTestCase {
     override func setUp() {
         super.setUp()
         StubProtocol.reset()
@@ -78,8 +78,8 @@ final class SnoozestackClientTests: XCTestCase {
         super.tearDown()
     }
 
-    private func makeClient() -> SnoozestackClient {
-        Snoozestack.createClient(
+    private func makeClient() -> SnoozeStackClient {
+        SnoozeStack.createClient(
             url: "https://demo.snoozestack.com",
             key: "test-anon-key",
             // An in-memory store keeps the test off the real keychain.
@@ -92,7 +92,7 @@ final class SnoozestackClientTests: XCTestCase {
         XCTAssertEqual(client.url, "https://demo.snoozestack.com")
         XCTAssertEqual(client.identity.state, .anonymous)
         // Trailing slashes are trimmed so every service path appends cleanly.
-        let trailing = Snoozestack.createClient(
+        let trailing = SnoozeStack.createClient(
             url: "https://demo.snoozestack.com/",
             key: "k",
             identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
@@ -144,7 +144,7 @@ final class SnoozestackClientTests: XCTestCase {
         do {
             let _: OKResponse = try await client.functions.invoke("charge")
             XCTFail("expected the call to throw")
-        } catch let error as SnoozestackFunctionsError {
+        } catch let error as SnoozeStackFunctionsError {
             guard case let .http(status, message) = error else {
                 return XCTFail("expected an http error, got \(error)")
             }
@@ -167,7 +167,7 @@ final class SnoozestackClientTests: XCTestCase {
 }
 
 /// Session storage that never touches the keychain — tests only.
-final class MemoryIdentityStorage: SnoozestackIdentityStorage, @unchecked Sendable {
+final class MemoryIdentityStorage: SnoozeStackIdentityStorage, @unchecked Sendable {
     private var values: [String: Data] = [:]
     func read(key: String) -> Data? { values[key] }
     func write(key: String, value: Data) { values[key] = value }

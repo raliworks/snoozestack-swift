@@ -1,6 +1,6 @@
 // Reads a project's schema.json (Epic A2: A2.1's portable type vocabulary,
 // A2.3's versioned artifact) from Swift — see this file's own top-level
-// doc comment on Snoozestack.swift for what this SDK actually is.
+// doc comment on SnoozeStack.swift for what this SDK actually is.
 //
 // SCOPE NOTE (A2.6, #51): this SDK is a device-side client — there is no
 // build step, no local filesystem project, and (for Tier 0 SQLite apps) no
@@ -20,25 +20,25 @@ import Foundation
 /// A project's schema.json, decoded — mirrors `sdk/src/schema.js`'s IR exactly
 /// (same field names, same shape) so a schema.json emitted by the JS SDK
 /// round-trips through this decoder unchanged.
-public struct SnoozestackSchema: Codable, Equatable, Sendable {
-    public var tables: [SnoozestackSchemaTable]
+public struct SnoozeStackSchema: Codable, Equatable, Sendable {
+    public var tables: [SnoozeStackSchemaTable]
 
-    public init(tables: [SnoozestackSchemaTable]) {
+    public init(tables: [SnoozeStackSchemaTable]) {
         self.tables = tables
     }
 }
 
-public struct SnoozestackSchemaTable: Codable, Equatable, Sendable {
+public struct SnoozeStackSchemaTable: Codable, Equatable, Sendable {
     public var name: String
-    public var columns: [SnoozestackSchemaColumn]
-    public var indexes: [SnoozestackSchemaIndex]
-    public var constraints: [SnoozestackSchemaConstraint]
+    public var columns: [SnoozeStackSchemaColumn]
+    public var indexes: [SnoozeStackSchemaIndex]
+    public var constraints: [SnoozeStackSchemaConstraint]
 
     public init(
         name: String,
-        columns: [SnoozestackSchemaColumn],
-        indexes: [SnoozestackSchemaIndex] = [],
-        constraints: [SnoozestackSchemaConstraint] = []
+        columns: [SnoozeStackSchemaColumn],
+        indexes: [SnoozeStackSchemaIndex] = [],
+        constraints: [SnoozeStackSchemaConstraint] = []
     ) {
         self.name = name
         self.columns = columns
@@ -51,7 +51,7 @@ public struct SnoozestackSchemaTable: Codable, Equatable, Sendable {
 /// a plain `String` `RawRepresentable` rather than an exhaustive enum, so a
 /// schema.json written by a newer JS SDK with one more type than this SDK
 /// knows about still decodes instead of throwing.
-public struct SnoozestackSchemaType: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
+public struct SnoozeStackSchemaType: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -76,7 +76,7 @@ public struct SnoozestackSchemaType: RawRepresentable, Codable, Equatable, Senda
 /// A column's `default`, which in schema.json is a JSON literal (string,
 /// number, boolean) or `null` — never an object/array (`schema.js`'s own
 /// `formatLiteral` only accepts those three primitive kinds).
-public enum SnoozestackSchemaDefault: Codable, Equatable, Sendable {
+public enum SnoozeStackSchemaDefault: Codable, Equatable, Sendable {
     case string(String)
     case number(Double)
     case boolean(Bool)
@@ -111,13 +111,13 @@ public enum SnoozestackSchemaDefault: Codable, Equatable, Sendable {
     }
 }
 
-public struct SnoozestackSchemaColumn: Codable, Equatable, Sendable {
+public struct SnoozeStackSchemaColumn: Codable, Equatable, Sendable {
     public var name: String
-    public var type: SnoozestackSchemaType
+    public var type: SnoozeStackSchemaType
     public var nullable: Bool
-    public var `default`: SnoozestackSchemaDefault
+    public var `default`: SnoozeStackSchemaDefault
 
-    public init(name: String, type: SnoozestackSchemaType, nullable: Bool = true, default: SnoozestackSchemaDefault = .null) {
+    public init(name: String, type: SnoozeStackSchemaType, nullable: Bool = true, default: SnoozeStackSchemaDefault = .null) {
         self.name = name
         self.type = type
         self.nullable = nullable
@@ -125,7 +125,7 @@ public struct SnoozestackSchemaColumn: Codable, Equatable, Sendable {
     }
 }
 
-public struct SnoozestackSchemaIndex: Codable, Equatable, Sendable {
+public struct SnoozeStackSchemaIndex: Codable, Equatable, Sendable {
     public var name: String
     public var columns: [String]
     public var unique: Bool
@@ -139,7 +139,7 @@ public struct SnoozestackSchemaIndex: Codable, Equatable, Sendable {
 
 /// `onDelete` action for a foreign-key constraint — matches `schema.js`'s
 /// `ON_DELETE_ACTIONS` (`cascade`, `setNull`, `restrict`, `noAction`).
-public struct SnoozestackOnDeleteAction: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
+public struct SnoozeStackOnDeleteAction: RawRepresentable, Codable, Equatable, Sendable, ExpressibleByStringLiteral {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -156,7 +156,7 @@ public struct SnoozestackOnDeleteAction: RawRepresentable, Codable, Equatable, S
     public static let noAction: Self = "noAction"
 }
 
-public struct SnoozestackSchemaForeignKeyReference: Codable, Equatable, Sendable {
+public struct SnoozeStackSchemaForeignKeyReference: Codable, Equatable, Sendable {
     public var table: String
     public var columns: [String]
 
@@ -172,17 +172,17 @@ public struct SnoozestackSchemaForeignKeyReference: Codable, Equatable, Sendable
 /// than a Swift enum with associated values) because that is the literal
 /// shape schema.json itself uses — decoding a real schema.json produced by
 /// the JS SDK should never require translating its shape first.
-public struct SnoozestackSchemaConstraint: Codable, Equatable, Sendable {
+public struct SnoozeStackSchemaConstraint: Codable, Equatable, Sendable {
     public var kind: String
     public var columns: [String]
-    public var references: SnoozestackSchemaForeignKeyReference?
-    public var onDelete: SnoozestackOnDeleteAction?
+    public var references: SnoozeStackSchemaForeignKeyReference?
+    public var onDelete: SnoozeStackOnDeleteAction?
 
     public init(
         kind: String,
         columns: [String],
-        references: SnoozestackSchemaForeignKeyReference? = nil,
-        onDelete: SnoozestackOnDeleteAction? = nil
+        references: SnoozeStackSchemaForeignKeyReference? = nil,
+        onDelete: SnoozeStackOnDeleteAction? = nil
     ) {
         self.kind = kind
         self.columns = columns
@@ -191,10 +191,10 @@ public struct SnoozestackSchemaConstraint: Codable, Equatable, Sendable {
     }
 }
 
-extension SnoozestackSchema {
+extension SnoozeStackSchema {
     /// Decodes a schema.json document (as emitted by `snoozestack schema
     /// build`/`push`, A2.3) from raw bytes.
-    public static func decode(_ data: Data) throws -> SnoozestackSchema {
-        try JSONDecoder().decode(SnoozestackSchema.self, from: data)
+    public static func decode(_ data: Data) throws -> SnoozeStackSchema {
+        try JSONDecoder().decode(SnoozeStackSchema.self, from: data)
     }
 }

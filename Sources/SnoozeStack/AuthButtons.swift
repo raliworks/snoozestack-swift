@@ -7,20 +7,20 @@
 //  These are STYLING shortcuts only — each takes the app's own handlers and
 //  performs no auth itself.
 //
-//  SnoozestackAppleSignInButton wraps Apple's `SignInWithAppleButton` (the
+//  SnoozeStackAppleSignInButton wraps Apple's `SignInWithAppleButton` (the
 //  control App Review expects) at a 50pt/12pt-radius geometry; pass a style
-//  to override the white default. SnoozestackGoogleSignInButton renders
+//  to override the white default. SnoozeStackGoogleSignInButton renders
 //  Google's light-theme treatment from their branding guidelines — white
 //  fill, #747775 hairline, #1F1F1F label — with the real four-colour "G"
-//  (SnoozestackGoogleLogo) drawn in Canvas from the official logo's paths,
+//  (SnoozeStackGoogleLogo) drawn in Canvas from the official logo's paths,
 //  vector-crisp at any size with no bundled asset.
 //
 
 import AuthenticationServices
 import SwiftUI
 
-/// Sign in with Apple, sized to pair with ``SnoozestackGoogleSignInButton``.
-public struct SnoozestackAppleSignInButton: View {
+/// Sign in with Apple, sized to pair with ``SnoozeStackGoogleSignInButton``.
+public struct SnoozeStackAppleSignInButton: View {
     private let label: SignInWithAppleButton.Label
     private let style: SignInWithAppleButton.Style
     private let onRequest: (ASAuthorizationAppleIDRequest) -> Void
@@ -47,7 +47,7 @@ public struct SnoozestackAppleSignInButton: View {
 }
 
 /// Sign in with Google, in Google's own light-theme treatment.
-public struct SnoozestackGoogleSignInButton: View {
+public struct SnoozeStackGoogleSignInButton: View {
     private let title: String
     private let action: () -> Void
 
@@ -65,7 +65,7 @@ public struct SnoozestackGoogleSignInButton: View {
     public var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                SnoozestackGoogleLogo()
+                SnoozeStackGoogleLogo()
                     .frame(width: 20, height: 20)
                 Text(title)
                     .font(.system(size: 17, weight: .medium))
@@ -86,7 +86,7 @@ public struct SnoozestackGoogleSignInButton: View {
 /// Google's four-colour "G", drawn from the official logo's paths. Their brand
 /// guidelines require the real mark on a sign-in button — an approximated
 /// glyph is both inaccurate and non-compliant.
-public struct SnoozestackGoogleLogo: View {
+public struct SnoozeStackGoogleLogo: View {
     public init() {}
 
     public var body: some View {

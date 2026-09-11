@@ -11,39 +11,30 @@ let package = Package(
     ],
     products: [
         // Full client: application identity + functions + signals + push.
-        .library(name: "Snoozestack", targets: ["Snoozestack"]),
+        .library(name: "SnoozeStack", targets: ["SnoozeStack"]),
         // Signals (event tracking) only — no third-party dependencies.
-        .library(name: "SnoozestackSignals", targets: ["SnoozestackSignals"]),
-        // Deprecated alias of SnoozestackSignals — kept for existing importers.
-        .library(name: "SnoozestackAnalytics", targets: ["SnoozestackAnalytics"]),
+        .library(name: "SnoozeStackSignals", targets: ["SnoozeStackSignals"]),
         // Push notification registration only — no third-party dependencies.
-        .library(name: "SnoozestackPush", targets: ["SnoozestackPush"]),
+        .library(name: "SnoozeStackPush", targets: ["SnoozeStackPush"]),
     ],
     dependencies: [],
     targets: [
         .target(
-            name: "Snoozestack",
+            name: "SnoozeStack",
             dependencies: [
-                "SnoozestackSignals",
-                "SnoozestackPush",
+                "SnoozeStackSignals",
+                "SnoozeStackPush",
             ],
-            path: "Sources/Snoozestack"
+            path: "Sources/SnoozeStack"
         ),
-        .target(name: "SnoozestackSignals", path: "Sources/SnoozestackSignals"),
-        // Thin re-export of SnoozestackSignals; keeps `import
-        // SnoozestackAnalytics` working after that module's own rename.
-        .target(
-            name: "SnoozestackAnalytics",
-            dependencies: ["SnoozestackSignals"],
-            path: "Sources/SnoozestackAnalytics"
-        ),
-        .target(name: "SnoozestackPush", path: "Sources/SnoozestackPush"),
+        .target(name: "SnoozeStackSignals", path: "Sources/SnoozeStackSignals"),
+        .target(name: "SnoozeStackPush", path: "Sources/SnoozeStackPush"),
         // Smoke tests for the client's own wiring, plus the application
         // identity contract shared with snoozestack-js.
         .testTarget(
-            name: "SnoozestackTests",
-            dependencies: ["Snoozestack"],
-            path: "Tests/SnoozestackTests"
+            name: "SnoozeStackTests",
+            dependencies: ["SnoozeStack"],
+            path: "Tests/SnoozeStackTests"
         ),
     ]
 )
