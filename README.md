@@ -70,7 +70,7 @@ import SnoozeStack
 // Once, at launch (e.g. in your App init).
 // URL + anon key: portal → Project Settings → API.
 let snoozestack = SnoozeStack.createClient(
-    url: "https://<project-ref>.snoozestack.com",   // SNOOZESTACK_URL
+    url: "https://<project-ref>.snzzz.com",   // SNOOZESTACK_URL
     key: "<SNOOZESTACK_ANON_KEY>"
 )
 

@@ -3,7 +3,7 @@
 //     import SnoozeStack
 //
 //     let snoozestack = SnoozeStack.createClient(
-//         url: "https://<project-ref>.snoozestack.com",   // SNOOZESTACK_URL from the portal
+//         url: "https://<project-ref>.snzzz.com",   // SNOOZESTACK_URL from the portal
 //         key: "<SNOOZESTACK_ANON_KEY>"
 //     )
 //
@@ -57,7 +57,7 @@ public final class SnoozeStackClient: Sendable {
 public enum SnoozeStack {
 
     /// Creates a snoozestack client. `url` is your project URL
-    /// (`https://<ref>.snoozestack.com`), `key` the anon key (apps) or the
+    /// (`https://<ref>.snzzz.com`), `key` the anon key (apps) or the
     /// service_role key (trusted servers only).
     ///
     /// Also configures `SnoozeStackSignals.shared` and `SnoozeStackPush.shared`

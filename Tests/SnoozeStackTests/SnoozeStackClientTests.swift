@@ -80,7 +80,7 @@ final class SnoozeStackClientTests: XCTestCase {
 
     private func makeClient() -> SnoozeStackClient {
         SnoozeStack.createClient(
-            url: "https://demo.snoozestack.com",
+            url: "https://demo.snzzz.com",
             key: "test-anon-key",
             // An in-memory store keeps the test off the real keychain.
             identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
@@ -89,15 +89,15 @@ final class SnoozeStackClientTests: XCTestCase {
 
     func testCreateClientExposesTheNativeSurface() {
         let client = makeClient()
-        XCTAssertEqual(client.url, "https://demo.snoozestack.com")
+        XCTAssertEqual(client.url, "https://demo.snzzz.com")
         XCTAssertEqual(client.identity.state, .anonymous)
         // Trailing slashes are trimmed so every service path appends cleanly.
         let trailing = SnoozeStack.createClient(
-            url: "https://demo.snoozestack.com/",
+            url: "https://demo.snzzz.com/",
             key: "k",
             identity: .init(storage: MemoryIdentityStorage(), autoRefresh: false)
         )
-        XCTAssertEqual(trailing.url, "https://demo.snoozestack.com")
+        XCTAssertEqual(trailing.url, "https://demo.snzzz.com")
     }
 
     func testInvokePostsToFunctionsV1WithTheApiKey() async throws {
@@ -105,7 +105,7 @@ final class SnoozeStackClientTests: XCTestCase {
         let _: OKResponse = try await client.functions.invoke("wallets")
 
         let request = try XCTUnwrap(StubProtocol.lastRequest)
-        XCTAssertEqual(request.url?.absoluteString, "https://demo.snoozestack.com/functions/v1/wallets")
+        XCTAssertEqual(request.url?.absoluteString, "https://demo.snzzz.com/functions/v1/wallets")
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "apikey"), "test-anon-key")
         // No session yet, so the api key is the bearer — same default as
@@ -161,7 +161,7 @@ final class SnoozeStackClientTests: XCTestCase {
         let request = try XCTUnwrap(StubProtocol.lastRequest)
         XCTAssertEqual(
             request.url?.absoluteString,
-            "https://demo.snoozestack.com/functions/v1/wallets?limit=10"
+            "https://demo.snzzz.com/functions/v1/wallets?limit=10"
         )
     }
 }

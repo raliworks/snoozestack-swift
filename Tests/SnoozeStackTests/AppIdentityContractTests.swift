@@ -8,7 +8,7 @@ import Foundation
 import XCTest
 @testable import SnoozeStack
 
-private let BASE = "https://demo.snoozestack.com"
+private let BASE = "https://demo.snzzz.com"
 private let KEY = "test-anon-key"
 
 // MARK: - Contract fixture
