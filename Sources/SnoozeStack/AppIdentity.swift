@@ -187,7 +187,7 @@ public final class KeychainIdentityStorage: SnoozeStackIdentityStorage, @uncheck
 public final class SnoozeStackIdentity: @unchecked Sendable {
   public struct Options: Sendable {
     /// "default" (live), "dev", or "preview:<name>" — must match the
-    /// namespace `snoozestack auth push` configured redirect_urls/providers
+    /// namespace whose published (or preview) [auth] declares the redirect_urls/providers
     /// for. Defaults to "default".
     public var namespace: String
     public var storage: any SnoozeStackIdentityStorage
